@@ -1,21 +1,17 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>Notion Clock Calendar</title>
 <style>
-  /* Layout: analog clock + digital readout on the left, Monday-first month grid on the right; stacks on phones. */
+  /* Layout: top bar (mode switch + theme toggle) over a two-column view. Clock view = analog clock + month grid.
+     Pomodoro view = progress ring + controls. Phones stack to one column and fill the embed height exactly. */
   :root {
     --bg: #ffffff;
     --surface-2: #f7f7f5;
     --text: #37352f;
     --muted: #8a8884;
     --border: rgba(55, 53, 47, 0.12);
+    --track: #ececea;
     --accent: #37352f;
     --accent-text: #ffffff;
-    --shadow: 0 1px 2px rgba(15, 15, 15, 0.05), 0 4px 14px rgba(15, 15, 15, 0.04);
-    --radius: 14px;
     --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", Roboto, Arial, sans-serif;
     --font-num: "SF Pro Rounded", ui-rounded, -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", "Segoe UI", Roboto, Arial, sans-serif;
   }
@@ -26,9 +22,9 @@
       --text: #ececec;
       --muted: #8e8e93;
       --border: rgba(255, 255, 255, 0.10);
+      --track: #3d3d40;
       --accent: #ececec;
       --accent-text: #2b2b2d;
-      --shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 6px 18px rgba(0, 0, 0, 0.2);
       color-scheme: dark;
     }
   }
@@ -38,42 +34,52 @@
     --text: #ececec;
     --muted: #8e8e93;
     --border: rgba(255, 255, 255, 0.10);
+    --track: #3d3d40;
     --accent: #ececec;
     --accent-text: #2b2b2d;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 6px 18px rgba(0, 0, 0, 0.2);
     color-scheme: dark;
   }
 
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
   body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--text);
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
     font-family: var(--font);
-    padding: 0;
     -webkit-font-smoothing: antialiased;
     transition: background .25s, color .25s;
   }
+  button { font: inherit; color: inherit; }
+  button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
 
   /* Edge-to-edge: no outer margin, border, radius or shadow, so it blends into the Notion page. */
-  .widget {
-    width: 100%; margin: 0; background: var(--bg);
-    border: 0; border-radius: 0; box-shadow: none; padding: 16px;
-    position: relative;
-    display: grid; grid-template-columns: 1fr 1.15fr; gap: 24px; align-items: center;
+  .app { min-height: 100%; display: flex; flex-direction: column; gap: 10px; padding: 12px 16px 16px; }
+  .bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+  /* Segmented control (mode switch and pomodoro phase tabs) */
+  .seg { display: inline-flex; gap: 2px; padding: 3px; background: var(--surface-2); border-radius: 10px; }
+  .seg button {
+    border: 0; background: transparent; color: var(--muted); cursor: pointer;
+    height: 28px; padding: 0 12px; border-radius: 8px; font-size: .8rem; font-weight: 500;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap;
+    transition: background .15s, color .15s;
   }
-  .widget > section { min-width: 0; }
-  @media (max-width: 560px) { .widget { grid-template-columns: 1fr; } }
+  .seg button:hover { color: var(--text); }
+  .seg button[aria-pressed="true"] { background: var(--bg); color: var(--text); box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgba(0, 0, 0, 0.06); }
+  .run-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
 
   .toggle {
-    position: absolute; top: 10px; right: 10px; width: 30px; height: 30px;
-    border-radius: 8px; border: 1px solid var(--border); background: transparent;
-    color: var(--muted); cursor: pointer; display: grid; place-items: center;
-    font-size: 14px; transition: background .15s, color .15s; z-index: 2;
+    width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border); background: transparent;
+    color: var(--muted); cursor: pointer; display: grid; place-items: center; font-size: 14px;
+    transition: background .15s, color .15s;
   }
   .toggle:hover { background: var(--surface-2); color: var(--text); }
-  .toggle:focus-visible, .nav button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
 
+  .view { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1.15fr; gap: 24px; align-items: center; }
+  .view > section, .view > div { min-width: 0; }
+
+  /* ---------- Clock view ---------- */
   .clock-wrap { display: flex; flex-direction: column; align-items: center; gap: 14px; }
   .analog { width: min(100%, 210px); aspect-ratio: 1; }
   .face { fill: var(--surface-2); stroke: var(--border); stroke-width: 1.5; }
@@ -89,104 +95,192 @@
   .time small { font-size: .95rem; font-weight: 500; color: var(--muted); margin-left: 4px; }
   .date { margin-top: 2px; font-size: .9rem; color: var(--muted); }
 
-  .cal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; padding-right: 34px; }
+  .cal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
   .cal-title { font-family: var(--font-num); font-size: 1.1rem; font-weight: 600; }
   .cal-title span { color: var(--muted); font-weight: 500; margin-left: 4px; }
   .nav { display: flex; gap: 4px; }
   .nav button {
-    border: 1px solid var(--border); background: transparent; color: var(--text);
-    border-radius: 7px; height: 28px; min-width: 28px; padding: 0 8px; cursor: pointer;
-    font: inherit; font-size: .8rem; transition: background .15s;
+    border: 1px solid var(--border); background: transparent; border-radius: 7px; height: 28px; min-width: 28px;
+    padding: 0 8px; cursor: pointer; font-size: .8rem; transition: background .15s;
   }
   .nav button:hover { background: var(--surface-2); }
   .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
   .dow { font-size: .7rem; color: var(--muted); padding: 6px 0; text-transform: uppercase; letter-spacing: .04em; }
-  .day {
-    font-family: var(--font-num); aspect-ratio: 1.15; display: grid; place-items: center; font-size: .85rem;
-    border-radius: 8px; font-variant-numeric: tabular-nums;
-  }
+  .day { font-family: var(--font-num); aspect-ratio: 1.15; display: grid; place-items: center; font-size: .85rem; border-radius: 8px; font-variant-numeric: tabular-nums; }
   .day.out { color: var(--muted); opacity: .45; }
   .day.today { background: var(--accent); color: var(--accent-text); font-weight: 600; }
   .day:not(.today):not(.out):hover { background: var(--surface-2); }
 
+  /* ---------- Pomodoro view ---------- */
+  .ring-wrap { display: flex; justify-content: center; align-items: center; min-height: 0; }
+  .ring-box { position: relative; width: min(100%, 230px); aspect-ratio: 1; }
+  .ring-box svg { display: block; width: 100%; height: 100%; }
+  .ring-bg { fill: none; stroke: var(--track); stroke-width: 8; }
+  .ring-fg { fill: none; stroke: var(--accent); stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset .3s linear, stroke .2s; }
+  .ring-box.brk .ring-fg { stroke: var(--muted); }
+  .ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+  .p-time { font-family: var(--font-num); font-size: 2.7rem; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1; }
+  .p-label { font-size: .85rem; color: var(--muted); }
+  .ring-box.done { animation: pulse 0.6s ease-in-out 3; }
+  @keyframes pulse { 50% { transform: scale(1.04); } }
+
+  .p-side { display: flex; flex-direction: column; gap: 14px; }
+  .tabs { display: flex; }
+  .tabs button { flex: 1; padding: 0 6px; }
+  .controls { display: flex; gap: 8px; }
+  .controls button {
+    height: 42px; min-width: 42px; border-radius: 11px; border: 1px solid var(--border); background: transparent;
+    cursor: pointer; display: grid; place-items: center; transition: background .15s, opacity .15s;
+  }
+  .controls button:hover { background: var(--surface-2); }
+  .controls button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .controls .primary { flex: 1; background: var(--accent); color: var(--accent-text); border-color: transparent; font-weight: 600; font-size: .95rem; }
+  .controls .primary:hover { background: var(--accent); opacity: .88; }
+  .controls .off { color: var(--muted); }
+  .meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: .8rem; color: var(--muted); }
+  .sessions { display: flex; align-items: center; gap: 8px; }
+  .dots { display: flex; gap: 5px; }
+  .dots i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--muted); display: block; }
+  .dots i.on { background: var(--accent); border-color: var(--accent); }
+  .step { display: flex; align-items: center; gap: 4px; }
+  .step button {
+    width: 28px; height: 28px; border-radius: 7px; border: 1px solid var(--border); background: transparent;
+    cursor: pointer; font-size: 1rem; line-height: 1; transition: background .15s;
+  }
+  .step button:hover { background: var(--surface-2); }
+  .step output { min-width: 52px; text-align: center; color: var(--text); font-variant-numeric: tabular-nums; }
+
+  @media (prefers-reduced-motion: reduce) { .ring-box.done { animation: none; } .ring-fg { transition: none; } }
+
+  /* ---------- Phones: compact, fills the embed height so nothing scrolls ---------- */
   @media (max-width: 560px) {
-    .widget { grid-template-columns: 1fr; gap: 14px; padding: 14px; }
-    /* Compact phone layout: small clock beside the digital time, shorter calendar cells, bigger tap targets. */
+    html, body { overflow: hidden; }
+    .app { height: 100%; min-height: 330px; padding: 10px 14px 12px; gap: 8px; }
+    .view { grid-template-columns: 1fr; gap: 8px; }
+    .toggle { width: 36px; height: 36px; }
+    .seg button { height: 32px; }
+
+    .view-clock { grid-template-rows: auto minmax(0, 1fr); }
     .clock-wrap { flex-direction: row; justify-content: center; gap: 16px; }
-    .analog { width: 116px; flex: none; }
-    .digital { text-align: left; min-width: 0; }
-    .time { font-size: 1.75rem; }
+    .analog { width: 92px; flex: none; }
+    .digital { text-align: left; }
+    .time { font-size: 1.6rem; }
     .time small { font-size: .8rem; }
     .date { font-size: .8rem; }
-    .cal-head { padding-right: 0; }
-    .nav button { height: 36px; min-width: 36px; font-size: .9rem; }
-    .toggle { top: 8px; right: 8px; width: 36px; height: 36px; }
-    /* Fill the embed height exactly: calendar rows stretch or shrink, so the page never scrolls. */
-    html, body { height: 100%; overflow: hidden; }
-    .widget { height: 100%; min-height: 330px; grid-template-rows: auto minmax(0, 1fr); gap: 8px; padding: 10px 14px 12px; }
-    .analog { width: 92px; }
-    .time { font-size: 1.6rem; }
-    .widget > section:last-child { align-self: stretch; display: flex; flex-direction: column; min-height: 0; }
+    .view-clock > section:last-child { align-self: stretch; display: flex; flex-direction: column; min-height: 0; }
     .cal-head { margin-bottom: 4px; }
-    .nav button { height: 32px; min-width: 32px; }
+    .nav button { height: 32px; min-width: 32px; font-size: .9rem; }
     .grid { flex: 1; min-height: 0; grid-template-rows: auto repeat(6, minmax(0, 1fr)); }
     .dow { padding: 2px 0; }
     .day { aspect-ratio: auto; font-size: .88rem; }
+
+    .view-pomo { display: flex; flex-direction: column; align-items: stretch; }
+    .ring-wrap { flex: 1; }
+    .ring-box { width: auto; height: 100%; max-height: 240px; max-width: 100%; }
+    .p-time { font-size: 2rem; }
+    .p-label { font-size: .75rem; }
+    .p-side { gap: 8px; flex: none; }
+    .controls button { height: 40px; }
   }
   @media (max-width: 560px) and (hover: none) { .day:not(.today):not(.out):hover { background: transparent; } }
 </style>
-</head>
-<body>
 
-<div class="widget" id="widget">
-  <button class="toggle" id="toggle" title="Toggle light / dark" aria-label="Toggle theme">◐</button>
-
-  <section class="clock-wrap">
-    <svg class="analog" viewBox="0 0 200 200" aria-hidden="true">
-      <circle class="face" cx="100" cy="100" r="94"/>
-      <g id="ticks"></g>
-      <line class="hand h" id="hh" x1="100" y1="100" x2="100" y2="58"/>
-      <line class="hand m" id="mh" x1="100" y1="100" x2="100" y2="38"/>
-      <line class="hand s" id="sh" x1="100" y1="112" x2="100" y2="30"/>
-      <circle class="pivot" cx="100" cy="100" r="4.5"/>
-    </svg>
-    <div class="digital">
-      <div class="time" id="time">--:--:--</div>
-      <div class="date" id="date"></div>
+<div class="app" id="app">
+  <header class="bar">
+    <div class="seg" role="group" aria-label="Mode">
+      <button type="button" id="mClock" aria-pressed="true">Clock</button>
+      <button type="button" id="mPomo" aria-pressed="false">Pomodoro<i class="run-dot" id="runDot" hidden></i></button>
     </div>
-  </section>
+    <button class="toggle" id="toggle" title="Toggle light / dark" aria-label="Toggle theme">◐</button>
+  </header>
 
-  <section>
-    <div class="cal-head">
-      <div class="cal-title" id="calTitle"></div>
-      <div class="nav">
-        <button id="prev" aria-label="Previous month">‹</button>
-        <button id="todayBtn">Today</button>
-        <button id="next" aria-label="Next month">›</button>
+  <section class="view view-clock" id="viewClock">
+    <div class="clock-wrap">
+      <svg class="analog" viewBox="0 0 200 200" aria-hidden="true">
+        <circle class="face" cx="100" cy="100" r="94"/>
+        <g id="ticks"></g>
+        <line class="hand h" id="hh" x1="100" y1="100" x2="100" y2="58"/>
+        <line class="hand m" id="mh" x1="100" y1="100" x2="100" y2="38"/>
+        <line class="hand s" id="sh" x1="100" y1="112" x2="100" y2="30"/>
+        <circle class="pivot" cx="100" cy="100" r="4.5"/>
+      </svg>
+      <div class="digital">
+        <div class="time" id="time">--:--:--</div>
+        <div class="date" id="date"></div>
       </div>
     </div>
-    <div class="grid" id="grid"></div>
+    <section>
+      <div class="cal-head">
+        <div class="cal-title" id="calTitle"></div>
+        <div class="nav">
+          <button type="button" id="prev" aria-label="Previous month">‹</button>
+          <button type="button" id="todayBtn">Today</button>
+          <button type="button" id="next" aria-label="Next month">›</button>
+        </div>
+      </div>
+      <div class="grid" id="grid"></div>
+    </section>
+  </section>
+
+  <section class="view view-pomo" id="viewPomo" hidden>
+    <div class="ring-wrap">
+      <div class="ring-box" id="ringBox">
+        <svg viewBox="0 0 200 200" aria-hidden="true">
+          <circle class="ring-bg" cx="100" cy="100" r="90"/>
+          <circle class="ring-fg" id="ringFg" cx="100" cy="100" r="90" transform="rotate(-90 100 100)"/>
+        </svg>
+        <div class="ring-center">
+          <div class="p-time" id="pTime" role="timer">25:00</div>
+          <div class="p-label" id="pLabel">Focus</div>
+        </div>
+      </div>
+    </div>
+    <div class="p-side">
+      <div class="seg tabs" role="group" aria-label="Session type">
+        <button type="button" data-pm="focus" aria-pressed="true">Focus</button>
+        <button type="button" data-pm="short" aria-pressed="false">Short break</button>
+        <button type="button" data-pm="long" aria-pressed="false">Long break</button>
+      </div>
+      <div class="controls">
+        <button type="button" class="primary" id="pStart">Start</button>
+        <button type="button" id="pReset" aria-label="Reset timer" title="Reset"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
+        <button type="button" id="pSkip" aria-label="Skip to next session" title="Skip"><svg viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg></button>
+        <button type="button" id="pSound" aria-label="Sound" title="Sound"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/><line id="soundOff" x1="3" y1="3" x2="21" y2="21"/></svg></button>
+      </div>
+      <div class="meta">
+        <div class="sessions"><div class="dots" id="dots"><i></i><i></i><i></i><i></i></div><span id="pToday">0 today</span></div>
+        <div class="step">
+          <button type="button" id="durMinus" aria-label="Shorter">−</button>
+          <output id="durVal">25 min</output>
+          <button type="button" id="durPlus" aria-label="Longer">+</button>
+        </div>
+      </div>
+    </div>
   </section>
 </div>
 
 <script>
 (function () {
-  // Theme: follows the system unless the viewer toggles (or ?theme=dark|light is set).
+  var $ = function (id) { return document.getElementById(id); };
+  var pad = function (n) { return n < 10 ? '0' + n : '' + n; };
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+  // ---------- Theme: follows the system unless toggled (or ?theme=dark|light)
   var root = document.documentElement;
   var params = new URLSearchParams(location.search);
-  var saved = null;
-  try { saved = localStorage.getItem('cc-theme'); } catch (e) {}
-  var forced = params.get('theme') || saved;
-  if (forced === 'dark' || forced === 'light') root.setAttribute('data-theme', forced);
-  document.getElementById('toggle').onclick = function () {
+  var forcedTheme = params.get('theme') || lsGet('cc-theme');
+  if (forcedTheme === 'dark' || forcedTheme === 'light') root.setAttribute('data-theme', forcedTheme);
+  $('toggle').onclick = function () {
     var isDark = root.getAttribute('data-theme') === 'dark' ||
       (!root.getAttribute('data-theme') && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
     var next = isDark ? 'light' : 'dark';
     root.setAttribute('data-theme', next);
-    try { localStorage.setItem('cc-theme', next); } catch (e) {}
+    lsSet('cc-theme', next);
   };
 
-  var ticks = document.getElementById('ticks'), NS = 'http://www.w3.org/2000/svg';
+  // ---------- Clock
+  var ticks = $('ticks'), NS = 'http://www.w3.org/2000/svg';
   for (var i = 0; i < 60; i++) {
     var major = i % 5 === 0, a = i * 6 * Math.PI / 180;
     var r1 = major ? 76 : 82, r2 = 88;
@@ -196,22 +290,17 @@
     l.setAttribute('class', 'tick' + (major ? ' major' : ''));
     ticks.appendChild(l);
   }
-
-  var hh = document.getElementById('hh'), mh = document.getElementById('mh'), sh = document.getElementById('sh');
-  var timeEl = document.getElementById('time'), dateEl = document.getElementById('date');
-  var pad = function (n) { return n < 10 ? '0' + n : '' + n; };
+  var hh = $('hh'), mh = $('mh'), sh = $('sh'), timeEl = $('time'), dateEl = $('date');
   function rot(el, deg) { el.setAttribute('transform', 'rotate(' + deg + ' 100 100)'); }
 
   var viewY, viewM, lastDay = -1;
-  var gridEl = document.getElementById('grid'), titleEl = document.getElementById('calTitle');
+  var gridEl = $('grid'), titleEl = $('calTitle');
   var DOW = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   var MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-
   function renderCal() {
     var now = new Date(), html = '';
     DOW.forEach(function (d) { html += '<div class="dow">' + d + '</div>'; });
-    var first = new Date(viewY, viewM, 1);
-    var offset = (first.getDay() + 6) % 7;
+    var offset = (new Date(viewY, viewM, 1).getDay() + 6) % 7;
     var start = new Date(viewY, viewM, 1 - offset);
     for (var i = 0; i < 42; i++) {
       var d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
@@ -225,25 +314,165 @@
   }
   function goToday() { var n = new Date(); viewY = n.getFullYear(); viewM = n.getMonth(); renderCal(); }
   function shift(n) { var d = new Date(viewY, viewM + n, 1); viewY = d.getFullYear(); viewM = d.getMonth(); renderCal(); }
-  document.getElementById('prev').onclick = function () { shift(-1); };
-  document.getElementById('next').onclick = function () { shift(1); };
-  document.getElementById('todayBtn').onclick = goToday;
+  $('prev').onclick = function () { shift(-1); };
+  $('next').onclick = function () { shift(1); };
+  $('todayBtn').onclick = goToday;
 
-  function tick() {
+  var raf = 0;
+  function clockFrame() {
     var n = new Date(), h = n.getHours(), m = n.getMinutes(), s = n.getSeconds(), ms = n.getMilliseconds();
     rot(sh, (s + ms / 1000) * 6);
     rot(mh, (m + s / 60) * 6);
     rot(hh, ((h % 12) + m / 60) * 30);
-    var h12 = h % 12 || 12;
-    timeEl.innerHTML = pad(h12) + ':' + pad(m) + ':' + pad(s) + '<small>' + (h >= 12 ? 'PM' : 'AM') + '</small>';
+    timeEl.innerHTML = pad(h % 12 || 12) + ':' + pad(m) + ':' + pad(s) + '<small>' + (h >= 12 ? 'PM' : 'AM') + '</small>';
     dateEl.textContent = n.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
     if (n.getDate() !== lastDay) { lastDay = n.getDate(); renderCal(); }
-    requestAnimationFrame(tick);
+    raf = requestAnimationFrame(clockFrame);
   }
+
+  // ---------- Pomodoro
+  var NAMES = { focus: 'Focus', short: 'Short break', long: 'Long break' };
+  var KEY = 'cc-pomo';
+  var todayStr = function () { var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
+  function fresh() {
+    return { mode: 'focus', dur: { focus: 25, short: 5, long: 15 }, running: false, endAt: 0, left: 25 * 60, cycle: 0, day: todayStr(), done: 0, sound: true };
+  }
+  function clampMin(v, d) { v = Math.round(Number(v)); return isFinite(v) && v >= 1 && v <= 120 ? v : d; }
+  var S = fresh();
+  (function load() {
+    var raw = lsGet(KEY); if (!raw) return;
+    try {
+      var o = JSON.parse(raw);
+      if (NAMES[o.mode]) S.mode = o.mode;
+      S.dur.focus = clampMin(o.dur && o.dur.focus, 25);
+      S.dur.short = clampMin(o.dur && o.dur.short, 5);
+      S.dur.long = clampMin(o.dur && o.dur.long, 15);
+      S.running = !!o.running && +o.endAt > 0;
+      S.endAt = +o.endAt || 0;
+      S.left = Math.max(0, Math.min(+o.left || S.dur[S.mode] * 60, S.dur[S.mode] * 60));
+      S.cycle = Math.max(0, Math.min(4, +o.cycle || 0));
+      S.day = o.day || todayStr(); S.done = Math.max(0, +o.done || 0);
+      S.sound = o.sound !== false;
+    } catch (e) { S = fresh(); }
+  })();
+  function save() { lsSet(KEY, JSON.stringify(S)); }
+
+  var ac = null;
+  function audio() {
+    try {
+      if (!ac) { var C = window.AudioContext || window.webkitAudioContext; if (C) ac = new C(); }
+      if (ac && ac.state === 'suspended') ac.resume();
+    } catch (e) {}
+  }
+  document.addEventListener('pointerdown', audio, { once: true });
+  function beep() {
+    if (!S.sound || !ac) return;
+    try {
+      var t = ac.currentTime;
+      [0, 0.22, 0.44].forEach(function (o, i) {
+        var osc = ac.createOscillator(), g = ac.createGain();
+        osc.type = 'sine'; osc.frequency.value = i === 2 ? 1046 : 784;
+        g.gain.setValueAtTime(0.0001, t + o);
+        g.gain.exponentialRampToValueAtTime(0.25, t + o + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + o + 0.2);
+        osc.connect(g); g.connect(ac.destination);
+        osc.start(t + o); osc.stop(t + o + 0.22);
+      });
+    } catch (e) {}
+  }
+
+  function remaining() { return S.running ? Math.max(0, Math.ceil((S.endAt - Date.now()) / 1000)) : S.left; }
+  function setMode(m) { S.mode = m; S.running = false; S.left = S.dur[m] * 60; save(); renderPomo(); }
+  function rollDay() { if (S.day !== todayStr()) { S.day = todayStr(); S.done = 0; } }
+  function advance(counted) {
+    rollDay();
+    var next;
+    if (S.mode === 'focus') {
+      if (counted) { S.cycle = Math.min(4, S.cycle + 1); S.done++; }
+      next = S.cycle >= 4 ? 'long' : 'short';
+    } else {
+      if (S.mode === 'long') S.cycle = 0;
+      next = 'focus';
+    }
+    setMode(next);
+  }
+  function complete() {
+    beep();
+    var box = $('ringBox'); box.classList.remove('done'); void box.offsetWidth; box.classList.add('done');
+    setTimeout(function () { box.classList.remove('done'); }, 2000);
+    advance(true);
+  }
+  function startStop() {
+    audio();
+    if (S.running) { S.left = remaining(); S.running = false; }
+    else { if (S.left <= 0) S.left = S.dur[S.mode] * 60; S.endAt = Date.now() + S.left * 1000; S.running = true; }
+    save(); renderPomo();
+  }
+
+  var CIRC = 2 * Math.PI * 90, ringFg = $('ringFg');
+  ringFg.style.strokeDasharray = CIRC;
+  function renderPomo() {
+    rollDay();
+    var rem = remaining(), total = S.dur[S.mode] * 60;
+    $('pTime').textContent = pad(Math.floor(rem / 60)) + ':' + pad(rem % 60);
+    $('pLabel').textContent = NAMES[S.mode] + (S.running ? '' : (rem < total ? ' · paused' : ''));
+    ringFg.style.strokeDashoffset = CIRC * (1 - Math.max(0, Math.min(1, rem / total)));
+    $('ringBox').classList.toggle('brk', S.mode !== 'focus');
+    Array.prototype.forEach.call(document.querySelectorAll('[data-pm]'), function (b) {
+      b.setAttribute('aria-pressed', b.getAttribute('data-pm') === S.mode ? 'true' : 'false');
+    });
+    $('pStart').textContent = S.running ? 'Pause' : (rem < total ? 'Resume' : 'Start');
+    Array.prototype.forEach.call($('dots').children, function (d, i) { d.className = i < S.cycle ? 'on' : ''; });
+    $('pToday').textContent = S.done + ' today';
+    $('durVal').textContent = S.dur[S.mode] + ' min';
+    $('soundOff').style.display = S.sound ? 'none' : '';
+    $('pSound').classList.toggle('off', !S.sound);
+    $('pSound').setAttribute('aria-pressed', S.sound ? 'true' : 'false');
+    $('runDot').hidden = !(S.running && view !== 'pomo');
+  }
+  setInterval(function () {
+    if (S.running && remaining() <= 0) { complete(); return; }
+    renderPomo();
+  }, 250);
+
+  $('pStart').onclick = startStop;
+  $('pReset').onclick = function () { S.running = false; S.left = S.dur[S.mode] * 60; save(); renderPomo(); };
+  $('pSkip').onclick = function () { advance(false); };
+  $('pSound').onclick = function () { S.sound = !S.sound; if (S.sound) audio(); save(); renderPomo(); };
+  Array.prototype.forEach.call(document.querySelectorAll('[data-pm]'), function (b) {
+    b.onclick = function () { setMode(b.getAttribute('data-pm')); };
+  });
+  function changeDur(dir) {
+    var step = S.mode === 'short' ? 1 : 5;
+    var v = S.dur[S.mode] + dir * step;
+    if (dir < 0 && v < 1) v = 1;
+    v = Math.max(1, Math.min(120, v));
+    S.dur[S.mode] = v; S.running = false; S.left = v * 60; save(); renderPomo();
+  }
+  $('durMinus').onclick = function () { changeDur(-1); };
+  $('durPlus').onclick = function () { changeDur(1); };
+
+  // ---------- Mode switch (?mode=pomodoro opens the timer by default)
+  var view = 'clock';
+  function setView(v) {
+    view = v;
+    $('viewClock').hidden = v !== 'clock';
+    $('viewPomo').hidden = v !== 'pomo';
+    $('mClock').setAttribute('aria-pressed', v === 'clock' ? 'true' : 'false');
+    $('mPomo').setAttribute('aria-pressed', v === 'pomo' ? 'true' : 'false');
+    lsSet('cc-view', v);
+    cancelAnimationFrame(raf);
+    if (v === 'clock') clockFrame();
+    renderPomo();
+  }
+  $('mClock').onclick = function () { setView('clock'); };
+  $('mPomo').onclick = function () { setView('pomo'); };
+
+  var qm = (params.get('mode') || '').toLowerCase();
+  var startView = qm === 'pomodoro' || qm === 'pomo' ? 'pomo' : qm === 'clock' ? 'clock' : (lsGet('cc-view') === 'pomo' ? 'pomo' : 'clock');
   goToday();
-  tick();
+  setView(startView);
 })();
 </script>
 
-</body>
-</html>
+</body></html>
