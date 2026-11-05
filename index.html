@@ -1,4 +1,8 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Notion Clock Calendar</title>
 <style>
   /* Layout: top bar (mode switch + theme toggle) over a two-column view. Clock view = analog clock + month grid.
@@ -184,6 +188,8 @@
   }
   @media (max-width: 560px) and (hover: none) { .day:not(.today):not(.out):hover { background: transparent; } }
 </style>
+</head>
+<body>
 
 <div class="app" id="app">
   <header class="bar">
@@ -443,9 +449,9 @@
     b.onclick = function () { setMode(b.getAttribute('data-pm')); };
   });
   function changeDur(dir) {
-    var step = S.mode === 'short' ? 1 : 5;
-    var v = S.dur[S.mode] + dir * step;
-    if (dir < 0 && v < 1) v = 1;
+    // Snap to multiples of 5 (5, 10, 15 ...); the only value below 5 is 1 minute.
+    var cur = S.dur[S.mode];
+    var v = dir > 0 ? (Math.floor(cur / 5) + 1) * 5 : (Math.ceil(cur / 5) - 1) * 5;
     v = Math.max(1, Math.min(120, v));
     S.dur[S.mode] = v; S.running = false; S.left = v * 60; save(); renderPomo();
   }
@@ -475,4 +481,5 @@
 })();
 </script>
 
-</body></html>
+</body>
+</html>
