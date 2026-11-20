@@ -80,8 +80,8 @@
   button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
 
   /* Edge-to-edge: no outer margin, border, radius or shadow, so it blends into the Notion page. */
-  .app { min-height: 100%; display: flex; flex-direction: column; gap: 10px; padding: 12px 16px 16px; }
-  .bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .app { min-height: 100%; display: flex; flex-direction: column; gap: 8px; padding: 8px 16px 14px; }
+  .bar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 
   /* Segmented control (mode switch and pomodoro phase tabs) */
   .seg { display: inline-flex; gap: 2px; padding: 3px; background: var(--surface-2); border-radius: 10px; }
@@ -93,14 +93,14 @@
   }
   .seg button:hover { color: var(--text); }
   .seg button[aria-pressed="true"] { background: var(--bg); color: var(--text); box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgba(0, 0, 0, 0.06); }
-  .run-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
-
-  .toggle {
-    width: 32px; height: 32px; border-radius: 50%; border: 0; background: var(--surface-2);
-    color: var(--muted); cursor: pointer; display: grid; place-items: center; font-size: 14px;
+  .rbtn {
+    position: relative; width: 30px; height: 30px; border-radius: 50%; border: 0; padding: 0;
+    background: var(--surface-2); color: var(--muted); cursor: pointer; display: grid; place-items: center;
     transition: background .15s, color .15s;
   }
-  .toggle:hover { background: var(--track); color: var(--text); }
+  .rbtn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .rbtn:hover { color: var(--text); background: var(--track); }
+  .run-dot { position: absolute; top: 0; right: 0; width: 8px; height: 8px; border-radius: 50%; background: var(--orange); box-shadow: 0 0 0 2px var(--bg); }
 
   .view { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1.15fr; gap: 24px; align-items: center; }
   .view > section, .view > div { min-width: 0; }
@@ -191,14 +191,14 @@
   /* ---------- Phones: compact, fills the embed height so nothing scrolls ---------- */
   @media (max-width: 560px) {
     html, body { overflow: hidden; }
-    .app { height: 100%; min-height: 330px; padding: 10px 14px 12px; gap: 8px; }
+    .app { height: 100%; min-height: 300px; padding: 8px 14px 10px; gap: 6px; }
     .view-pomo { grid-template-columns: 1fr; gap: 8px; }
-    .toggle { width: 36px; height: 36px; }
+    .rbtn { width: 32px; height: 32px; }
     .seg button { height: 32px; }
 
     /* Clock stays on the left and the calendar on the right, like a medium iPhone widget. */
-    /* Content-sized and centred, so the calendar is exactly as tall as the clock column beside it. */
-    .view-clock { flex: none; margin-block: auto; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); grid-template-rows: auto; align-items: stretch; gap: 12px; }
+    /* Content-sized and pinned right under the header; the calendar is exactly as tall as the clock column. */
+    .view-clock { flex: none; margin-block: 0 auto; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); grid-template-rows: auto; align-items: stretch; gap: 12px; }
     .clock-wrap { gap: 8px; justify-content: center; }
     .analog { width: 100%; max-width: 150px; }
     .time { font-size: 1.05rem; }
@@ -222,7 +222,7 @@
     .view-pomo { display: flex; flex-direction: column; align-items: stretch; }
     .ring-wrap { flex: 1; }
     .ring-box { width: auto; height: 100%; max-height: 240px; max-width: 100%; }
-    .p-time { font-size: 2rem; }
+    .p-time { font-size: min(2rem, 8vh); }
     .p-label { font-size: .75rem; }
     .p-side { gap: 10px; flex: none; }
     .controls { padding: 0 4px; }
@@ -237,11 +237,12 @@
 
 <div class="app" id="app">
   <header class="bar">
-    <div class="seg" role="group" aria-label="Mode">
-      <button type="button" id="mClock" aria-pressed="true">Clock</button>
-      <button type="button" id="mPomo" aria-pressed="false">Pomodoro<i class="run-dot" id="runDot" hidden></i></button>
-    </div>
-    <button class="toggle" id="toggle" title="Toggle light / dark" aria-label="Toggle theme">◐</button>
+    <button type="button" class="rbtn" id="mToggle" aria-label="Switch to Pomodoro timer" title="Pomodoro">
+      <svg id="icPomo" viewBox="0 0 24 24"><line x1="10" y1="2" x2="14" y2="2"/><line x1="12" y1="14" x2="15" y2="11"/><circle cx="12" cy="14" r="8"/></svg>
+      <svg id="icClock" viewBox="0 0 24 24" hidden><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <i class="run-dot" id="runDot" hidden></i>
+    </button>
+    <button type="button" class="rbtn" id="toggle" title="Toggle light / dark" aria-label="Toggle theme"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg></button>
   </header>
 
   <section class="view view-clock" id="viewClock">
@@ -529,15 +530,18 @@
     view = v;
     $('viewClock').hidden = v !== 'clock';
     $('viewPomo').hidden = v !== 'pomo';
-    $('mClock').setAttribute('aria-pressed', v === 'clock' ? 'true' : 'false');
-    $('mPomo').setAttribute('aria-pressed', v === 'pomo' ? 'true' : 'false');
+    // One button: shows the icon of the mode it will switch to.
+    $('icPomo').toggleAttribute('hidden', v !== 'clock');
+    $('icClock').toggleAttribute('hidden', v === 'clock');
+    var mt = $('mToggle');
+    mt.setAttribute('aria-label', v === 'clock' ? 'Switch to Pomodoro timer' : 'Switch to clock');
+    mt.title = v === 'clock' ? 'Pomodoro' : 'Clock';
     lsSet('cc-view', v);
     cancelAnimationFrame(raf);
     if (v === 'clock') clockFrame();
     renderPomo();
   }
-  $('mClock').onclick = function () { setView('clock'); };
-  $('mPomo').onclick = function () { setView('pomo'); };
+  $('mToggle').onclick = function () { setView(view === 'clock' ? 'pomo' : 'clock'); };
 
   var qm = (params.get('mode') || '').toLowerCase();
   var startView = qm === 'pomodoro' || qm === 'pomo' ? 'pomo' : qm === 'clock' ? 'clock' : (lsGet('cc-view') === 'pomo' ? 'pomo' : 'clock');
