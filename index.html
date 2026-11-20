@@ -197,8 +197,9 @@
     .seg button { height: 32px; }
 
     /* Clock stays on the left and the calendar on the right, like a medium iPhone widget. */
-    .view-clock { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); grid-template-rows: minmax(0, 1fr); gap: 12px; }
-    .clock-wrap { gap: 8px; }
+    /* Content-sized and centred, so the calendar is exactly as tall as the clock column beside it. */
+    .view-clock { flex: none; margin-block: auto; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); grid-template-rows: auto; align-items: stretch; gap: 12px; }
+    .clock-wrap { gap: 8px; justify-content: center; }
     .analog { width: 100%; max-width: 150px; }
     .time { font-size: 1.05rem; }
     .time small { font-size: .6rem; margin-left: 2px; }
@@ -213,10 +214,10 @@
     .nav { gap: 0; }
     .nav button { height: 28px; min-width: 22px; padding: 0 2px; font-size: 1.15rem; }
     .nav #todayBtn { font-size: .7rem; padding: 0 5px; }
-    .grid { flex: 1; min-height: 0; grid-template-rows: auto repeat(6, minmax(0, 1fr)); }
+    .grid { flex: 1; min-height: 0; grid-template-rows: auto repeat(6, minmax(24px, 1fr)); }
     .dow { padding: 2px 0; font-size: .62rem; }
     .day { aspect-ratio: auto; font-size: .78rem; }
-    .day span { width: 1.9em; height: 1.9em; }
+    .day span { width: 1.8em; height: 1.8em; }
 
     .view-pomo { display: flex; flex-direction: column; align-items: stretch; }
     .ring-wrap { flex: 1; }
