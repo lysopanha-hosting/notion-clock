@@ -1,590 +1,549 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="color-scheme" content="light dark">
-<title>Clock, Calendar & Pomodoro</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notion Clock Calendar</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
 <style>
+  /* Layout: top bar (mode switch + theme toggle) over a two-column view. Clock view = analog clock + month grid.
+     Pomodoro view = progress ring + controls. Phones stack to one column and fill the embed height exactly. */
   :root {
-    /* iPhone widget look — dark palette (default) */
-    --clock-bg: #000000;
-    --card-bg: #1c1c1e;
-    --card-border: rgba(255,255,255,.08);
-    --card-shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.35);
-    --text: #ffffff;
-    --muted: rgba(235,235,245,.45);
-    --tick: rgba(255,255,255,.28);
-    --hand: #ffffff;
-    --red: #ff453a;
-    --green: #30d158;
-    --orange: #ff9f0a;
-    --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Rounded", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  }
-  .light {
-    --clock-bg: #ffffff;
-    --card-bg: #ffffff;
-    --card-border: rgba(55,53,47,.12);
-    --card-shadow: 0 1px 2px rgba(0,0,0,.05), 0 6px 18px rgba(0,0,0,.06);
-    --text: #000000;
-    --muted: rgba(60,60,67,.45);
-    --tick: rgba(60,60,67,.3);
-    --hand: #000000;
+    --bg: #ffffff;
+    --surface-2: #f2f2f7;
+    --text: #1c1c1e;
+    --muted: #8e8e93;
+    --border: rgba(60, 60, 67, 0.14);
+    --track: #e5e5ea;
+    --accent: #1c1c1e;
+    --accent-text: #ffffff;
+    --face: #f2f2f7;
     --red: #ff3b30;
+    --red-soft: rgba(255, 59, 48, 0.10);
+    --orange: #ff9500;
+    --orange-soft: rgba(255, 149, 0, 0.16);
     --green: #34c759;
+    --green-soft: rgba(52, 199, 89, 0.16);
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", Inter, "Helvetica Neue", "Segoe UI", Roboto, Arial, sans-serif;
+    --font-num: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter, "Helvetica Neue", "Segoe UI", Roboto, Arial, sans-serif;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-  html, body {
-    height: 100%;
-    background: transparent;
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #2b2b2d;
+      --surface-2: #343436;
+      --text: #f2f2f7;
+      --muted: #98989d;
+      --border: rgba(255, 255, 255, 0.10);
+      --track: #3d3d40;
+      --accent: #f2f2f7;
+      --accent-text: #2b2b2d;
+      --face: #1c1c1e;
+      --red: #ff453a;
+      --red-soft: rgba(255, 69, 58, 0.16);
+      --orange: #ff9f0a;
+      --orange-soft: rgba(255, 159, 10, 0.20);
+      --green: #30d158;
+      --green-soft: rgba(48, 209, 88, 0.20);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #2b2b2d;
+    --surface-2: #343436;
+    --text: #f2f2f7;
+    --muted: #98989d;
+    --border: rgba(255, 255, 255, 0.10);
+    --track: #3d3d40;
+    --accent: #f2f2f7;
+    --accent-text: #2b2b2d;
+    --face: #1c1c1e;
+    --red: #ff453a;
+    --red-soft: rgba(255, 69, 58, 0.16);
+    --orange: #ff9f0a;
+    --orange-soft: rgba(255, 159, 10, 0.20);
+    --green: #30d158;
+    --green-soft: rgba(48, 209, 88, 0.20);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
     font-family: var(--font);
-    color: var(--text);
     -webkit-font-smoothing: antialiased;
-    -webkit-text-size-adjust: 100%;
-    overflow: hidden;
+    transition: background .25s, color .25s;
   }
-  button { font-family: inherit; }
+  button { font: inherit; color: inherit; }
+  button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
 
-  /* Always two columns: clock LEFT, calendar / pomodoro RIGHT — on phone and desktop. Never stacks. */
-  .wrap {
-    height: 100%;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
-    grid-template-rows: minmax(0, 1fr);
-    gap: clamp(5px, 2.5vmin, 14px);
-    padding: clamp(3px, 1.5vmin, 8px);
+  /* Edge-to-edge: no outer margin, border, radius or shadow, so it blends into the Notion page. */
+  .app { min-height: 100%; display: flex; flex-direction: column; gap: 10px; padding: 12px 16px 16px; }
+  .bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+  /* Segmented control (mode switch and pomodoro phase tabs) */
+  .seg { display: inline-flex; gap: 2px; padding: 3px; background: var(--surface-2); border-radius: 10px; }
+  .seg button {
+    border: 0; background: transparent; color: var(--muted); cursor: pointer;
+    height: 28px; padding: 0 12px; border-radius: 8px; font-size: .8rem; font-weight: 500;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap;
+    transition: background .15s, color .15s;
   }
-  .card {
-    container-type: size;
-    min-width: 0;
-    min-height: 0;
-    border: 1px solid var(--card-border);
-    border-radius: clamp(14px, 9vmin, 32px);
-    box-shadow: var(--card-shadow);
-    overflow: hidden;
+  .seg button:hover { color: var(--text); }
+  .seg button[aria-pressed="true"] { background: var(--bg); color: var(--text); box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgba(0, 0, 0, 0.06); }
+  .run-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+
+  .toggle {
+    width: 32px; height: 32px; border-radius: 50%; border: 0; background: var(--surface-2);
+    color: var(--muted); cursor: pointer; display: grid; place-items: center; font-size: 14px;
+    transition: background .15s, color .15s;
   }
+  .toggle:hover { background: var(--track); color: var(--text); }
 
-  /* ---------- Clock ---------- */
-  .clock { background: var(--clock-bg); display: grid; place-items: center; padding: clamp(4px, 3vmin, 14px); }
-  .clock svg { width: 100%; height: 100%; display: block; }
-  .num { fill: var(--text); font-size: 11px; font-weight: 600; text-anchor: middle; dominant-baseline: central; font-family: var(--font); }
-  .hand { stroke: var(--hand); stroke-linecap: round; }
-  .hand-s { stroke: var(--orange); stroke-linecap: round; }
+  .view { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1.15fr; gap: 24px; align-items: center; }
+  .view > section, .view > div { min-width: 0; }
 
-  /* ---------- Right card (calendar / pomodoro) ---------- */
-  .calcard { background: var(--card-bg); }
-  .cal {
-    --accent: var(--red);
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    touch-action: pan-y;
-    user-select: none;
-    -webkit-user-select: none;
-    padding: 5vmin;                 /* fallback */
-    padding: min(6.5cqw, 6.5cqh);
-    font-size: 3.6vmin;             /* fallback */
-    font-size: min(5.2cqw, 4.6cqh);
+  /* ---------- Clock view (iPhone style: analog clock on the left, calendar on the right at every width) ---------- */
+  .clock-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .analog { width: min(100%, 220px); aspect-ratio: 1; }
+  /* iPhone analog widget: no face or frame, numerals and ticks sit straight on the widget background. */
+  .tick { stroke: var(--muted); stroke-width: 1.2; stroke-linecap: round; opacity: .55; }
+  .tick.major { stroke: var(--text); stroke-width: 2; opacity: .9; }
+  .num { font-family: var(--font-num); font-size: 21px; font-weight: 600; fill: var(--text); text-anchor: middle; dominant-baseline: central; }
+  .hand { stroke-linecap: round; }
+  .hand.h { stroke: var(--text); stroke-width: 7; }
+  .hand.m { stroke: var(--text); stroke-width: 5; }
+  .hand.s { stroke: var(--orange); stroke-width: 2; }
+  .pivot { fill: var(--orange); }
+  .pivot-in { fill: var(--bg); }
+  .digital { text-align: center; }
+  .time { font-family: var(--font-num); font-size: 2rem; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .time small { font-size: .85rem; font-weight: 600; color: var(--muted); margin-left: 4px; letter-spacing: 0; }
+  .date { margin-top: 4px; font-size: .85rem; color: var(--muted); display: flex; gap: 6px; justify-content: center; align-items: baseline; flex-wrap: wrap; }
+  .wk { color: var(--red); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; font-size: .75rem; }
+  .dts { display: none; }
+
+  .cal-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 8px; }
+  .cal-title { font-family: var(--font-num); font-size: 1.35rem; font-weight: 700; letter-spacing: -0.01em; line-height: 1.1; white-space: nowrap; }
+  .cal-title span { color: var(--red); font-weight: 600; font-size: .9rem; margin-left: 6px; letter-spacing: 0; }
+  .nav { display: flex; align-items: center; gap: 2px; }
+  .nav button {
+    border: 0; background: transparent; color: var(--red); border-radius: 999px; height: 30px; min-width: 30px;
+    padding: 0 8px; cursor: pointer; font-size: 1.25rem; line-height: 1; transition: background .15s;
   }
-  .cal[data-mode="short"], .cal[data-mode="long"] { --accent: var(--green); }
-  .cal[data-view="cal"]  .only-pomo { display: none !important; }
-  .cal[data-view="pomo"] .only-cal  { display: none !important; }
+  .nav #todayBtn { font-size: .85rem; font-weight: 500; padding: 0 10px; }
+  .nav button:hover { background: var(--red-soft); }
+  .grid { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; }
+  .dow { font-size: .72rem; font-weight: 600; color: var(--muted); padding: 4px 0 6px; }
+  .day { font-family: var(--font-num); aspect-ratio: 1.2; display: grid; place-items: center; font-size: .95rem; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .day span { display: grid; place-items: center; width: 2em; height: 2em; border-radius: 50%; line-height: 1; }
+  .day.out { color: var(--muted); opacity: .4; }
+  .day.today span { background: var(--red); color: #fff; font-weight: 700; }
+  .day:not(.today):not(.out):hover span { background: var(--surface-2); }
 
-  .cal-head { display: flex; align-items: center; justify-content: space-between; gap: .3em; margin-bottom: .4em; }
-  .titlebox { min-width: 0; white-space: nowrap; overflow: hidden; }
-  .month { font-size: 1.15em; font-weight: 700; color: var(--red); text-transform: uppercase; letter-spacing: .03em; cursor: pointer; }
-  .year { color: var(--muted); font-weight: 600; margin-left: .4em; font-size: .85em; }
-  @container (max-width: 230px) { .year { display: none; } }
+  /* ---------- Pomodoro view (iPhone Timer style) ---------- */
+  .ring-wrap { display: flex; justify-content: center; align-items: center; min-height: 0; }
+  .ring-box { position: relative; width: min(100%, 230px); aspect-ratio: 1; }
+  .ring-box svg { display: block; width: 100%; height: 100%; }
+  .ring-bg { fill: none; stroke: var(--track); stroke-width: 7; }
+  .ring-fg { fill: none; stroke: var(--orange); stroke-width: 7; stroke-linecap: round; transition: stroke-dashoffset .3s linear, stroke .2s; }
+  .ring-box.brk .ring-fg { stroke: var(--green); }
+  .ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+  .p-time { font-family: var(--font-num); font-size: 2.9rem; font-weight: 300; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1; }
+  .p-label { font-size: .85rem; color: var(--muted); }
+  .ring-box.done { animation: pulse 0.6s ease-in-out 3; }
+  @keyframes pulse { 50% { transform: scale(1.04); } }
 
-  .tools { display: flex; align-items: center; gap: .05em; flex-shrink: 0; }
-  .nav { display: flex; gap: .05em; }
-  .ic {
-    background: none; border: 0; color: var(--muted); font-size: 1.3em; line-height: 1;
-    min-width: 22px; min-height: 22px; width: 1.55em; height: 1.55em;
-    border-radius: 50%; cursor: pointer; touch-action: manipulation;
-    display: grid; place-items: center;
-    opacity: .75; transition: opacity .15s, background .15s;
+  .p-side { display: flex; flex-direction: column; gap: 16px; }
+  .tabs { display: flex; }
+  .tabs button { flex: 1; padding: 0 6px; }
+  .controls { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 4px; }
+  .circle {
+    position: relative; flex: none; width: 60px; height: 60px; border-radius: 50%; border: 0; cursor: pointer;
+    display: grid; place-items: center; font-size: .88rem; font-weight: 500; transition: opacity .15s;
   }
-  .ic svg { width: 62%; height: 62%; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-  .card:hover .ic { opacity: 1; }
-  .ic:hover, .ic:active { background: rgba(127,127,127,.22); color: var(--text); opacity: 1; }
+  .circle::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 1.5px solid currentColor; opacity: .2; pointer-events: none; }
+  .circle:hover { opacity: .85; }
+  #pReset { background: var(--surface-2); color: var(--text); }
+  .circle.primary { background: var(--green-soft); color: var(--green); }
+  .circle.primary.pause { background: var(--orange-soft); color: var(--orange); }
+  .mini-group { display: flex; gap: 10px; }
+  .mini { width: 36px; height: 36px; border-radius: 50%; border: 0; background: var(--surface-2); color: var(--text); cursor: pointer; display: grid; place-items: center; transition: opacity .15s; }
+  .mini:hover { opacity: .8; }
+  .mini svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .mini.off { color: var(--muted); }
+  .meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: .8rem; color: var(--muted); }
+  .sessions { display: flex; align-items: center; gap: 8px; }
+  .dots { display: flex; gap: 5px; }
+  .dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--track); display: block; }
+  .dots i.on { background: var(--orange); }
+  .step { display: flex; align-items: center; gap: 8px; }
+  .step output { color: var(--text); font-variant-numeric: tabular-nums; }
+  .stepper { display: flex; background: var(--surface-2); border-radius: 9px; }
+  .stepper button { width: 36px; height: 28px; border: 0; background: transparent; color: var(--text); font-size: 1.1rem; line-height: 1; cursor: pointer; border-radius: 9px 0 0 9px; transition: background .15s; }
+  .stepper button + button { border-left: 1px solid var(--border); border-radius: 0 9px 9px 0; }
+  .stepper button:hover { background: var(--track); }
 
-  /* Calendar */
-  .calbody { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-  .dow, .grid { display: grid; grid-template-columns: repeat(7, 1fr); }
-  .dow { font-size: .8em; font-weight: 600; color: var(--muted); text-align: center; margin-bottom: .25em; }
-  .grid { flex: 1; min-height: 0; }
-  .cell { display: flex; align-items: center; justify-content: center; min-height: 0; font-weight: 500; font-variant-numeric: tabular-nums; }
-  .cell span { display: flex; align-items: center; justify-content: center; height: min(1.95em, 100%); aspect-ratio: 1 / 1; border-radius: 50%; }
-  .cell.we { color: var(--muted); }
-  .cell.today { color: #fff; font-weight: 700; }
-  .cell.today span { background: var(--red); }
+  @media (prefers-reduced-motion: reduce) { .ring-box.done { animation: none; } .ring-fg { transition: none; } }
 
-  /* Pomodoro */
-  .chips { display: flex; gap: .25em; }
-  .chips button {
-    border: 0; background: rgba(127,127,127,.18); color: var(--muted);
-    font-size: .8em; font-weight: 600; padding: .3em .65em; border-radius: 999px;
-    cursor: pointer; touch-action: manipulation;
-  }
-  .chips button.on { background: var(--accent); color: #fff; }
-  .pomo { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; gap: .2em; }
-  .ringrow { flex: 1; min-height: 0; width: 100%; display: flex; align-items: center; gap: .3em; }
-  .ringwrap { flex: 1; min-width: 0; height: 100%; }
-  .adj {
-    border: 0; flex-shrink: 0; background: rgba(127,127,127,.2); color: var(--text);
-    width: 2.3em; height: 2.3em; min-width: 28px; min-height: 28px; border-radius: 50%;
-    font-size: .85em; font-weight: 700; font-variant-numeric: tabular-nums;
-    cursor: pointer; touch-action: manipulation;
-  }
-  .adj:active { transform: scale(.94); }
-  .adj:hover { background: rgba(127,127,127,.32); }
-  .ringwrap svg { width: 100%; height: 100%; display: block; }
-  .ring-track { fill: none; stroke: rgba(127,127,127,.22); stroke-width: 6; }
-  .ring-prog { fill: none; stroke: var(--accent); stroke-width: 6; stroke-linecap: round; transition: stroke .3s; }
-  .time { fill: var(--text); font-size: 19px; font-weight: 600; text-anchor: middle; dominant-baseline: central; font-variant-numeric: tabular-nums; font-family: var(--font); }
-  .lbl { fill: var(--muted); font-size: 5.2px; font-weight: 700; letter-spacing: .1em; text-anchor: middle; font-family: var(--font); }
-  .dot { fill: rgba(127,127,127,.3); }
-  .dot.on { fill: var(--accent); }
-  .ctrls { display: flex; align-items: center; justify-content: center; gap: .8em; flex-shrink: 0; }
-  .cbtn {
-    border: 0; width: 2.1em; height: 2.1em; min-width: 28px; min-height: 28px; border-radius: 50%;
-    background: rgba(127,127,127,.2); color: var(--text); display: grid; place-items: center;
-    cursor: pointer; touch-action: manipulation;
-  }
-  .cbtn svg { width: 46%; height: 46%; fill: currentColor; }
-  .cbtn.main { width: 2.7em; height: 2.7em; min-width: 34px; min-height: 34px; background: var(--accent); color: #fff; }
-  .cbtn:active { transform: scale(.94); }
+  /* ---------- Phones: compact, fills the embed height so nothing scrolls ---------- */
+  @media (max-width: 560px) {
+    html, body { overflow: hidden; }
+    .app { height: 100%; min-height: 330px; padding: 10px 14px 12px; gap: 8px; }
+    .view-pomo { grid-template-columns: 1fr; gap: 8px; }
+    .toggle { width: 36px; height: 36px; }
+    .seg button { height: 32px; }
 
-  @media (max-width: 320px) { .wrap { grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); } }
+    /* Clock stays on the left and the calendar on the right, like a medium iPhone widget. */
+    .view-clock { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); grid-template-rows: minmax(0, 1fr); gap: 12px; }
+    .clock-wrap { gap: 8px; }
+    .analog { width: 100%; max-width: 150px; }
+    .time { font-size: 1.05rem; }
+    .time small { font-size: .6rem; margin-left: 2px; }
+    .date { font-size: .7rem; gap: 4px; margin-top: 2px; }
+    .wk { font-size: .62rem; }
+    .dtl { display: none; }
+    .dts { display: inline; }
+    .view-clock > section:last-child { align-self: stretch; display: flex; flex-direction: column; min-height: 0; }
+    .cal-head { margin-bottom: 2px; }
+    .cal-title { font-size: .95rem; }
+    .cal-title span { font-size: .62rem; margin-left: 3px; }
+    .nav { gap: 0; }
+    .nav button { height: 28px; min-width: 22px; padding: 0 2px; font-size: 1.15rem; }
+    .nav #todayBtn { font-size: .7rem; padding: 0 5px; }
+    .grid { flex: 1; min-height: 0; grid-template-rows: auto repeat(6, minmax(0, 1fr)); }
+    .dow { padding: 2px 0; font-size: .62rem; }
+    .day { aspect-ratio: auto; font-size: .78rem; }
+    .day span { width: 1.9em; height: 1.9em; }
+
+    .view-pomo { display: flex; flex-direction: column; align-items: stretch; }
+    .ring-wrap { flex: 1; }
+    .ring-box { width: auto; height: 100%; max-height: 240px; max-width: 100%; }
+    .p-time { font-size: 2rem; }
+    .p-label { font-size: .75rem; }
+    .p-side { gap: 10px; flex: none; }
+    .controls { padding: 0 4px; }
+    .circle { width: 50px; height: 50px; font-size: .78rem; }
+    .mini { width: 34px; height: 34px; }
+  }
+  @media (max-width: 370px) { .cal-title span { display: none; } }
+  @media (max-width: 560px) and (hover: none) { .day:not(.today):not(.out):hover { background: transparent; } }
 </style>
 </head>
 <body>
-<div class="wrap">
 
-  <!-- Clock (always left) -->
-  <section class="card clock" aria-label="Analog clock">
-    <svg viewBox="0 0 100 100" role="img" aria-label="Analog clock" preserveAspectRatio="xMidYMid meet">
-      <g id="ticks"></g>
-      <g id="nums"></g>
-      <line id="hh" class="hand" x1="50" y1="56" x2="50" y2="27" stroke-width="4.2"/>
-      <line id="mh" class="hand" x1="50" y1="56" x2="50" y2="12" stroke-width="3"/>
-      <g id="sh"><line class="hand-s" x1="50" y1="62" x2="50" y2="10" stroke-width="1.1"/></g>
-      <circle cx="50" cy="50" r="3.4" fill="var(--orange)"/>
-      <circle cx="50" cy="50" r="1.3" fill="var(--clock-bg)"/>
-    </svg>
+<div class="app" id="app">
+  <header class="bar">
+    <div class="seg" role="group" aria-label="Mode">
+      <button type="button" id="mClock" aria-pressed="true">Clock</button>
+      <button type="button" id="mPomo" aria-pressed="false">Pomodoro<i class="run-dot" id="runDot" hidden></i></button>
+    </div>
+    <button class="toggle" id="toggle" title="Toggle light / dark" aria-label="Toggle theme">◐</button>
+  </header>
+
+  <section class="view view-clock" id="viewClock">
+    <div class="clock-wrap">
+      <svg class="analog" viewBox="0 0 200 200" aria-hidden="true">
+        <g id="ticks"></g>
+        <g id="nums"></g>
+        <line class="hand h" id="hh" x1="100" y1="100" x2="100" y2="60"/>
+        <line class="hand m" id="mh" x1="100" y1="100" x2="100" y2="38"/>
+        <line class="hand s" id="sh" x1="100" y1="114" x2="100" y2="22"/>
+        <circle class="pivot" cx="100" cy="100" r="5"/>
+        <circle class="pivot-in" cx="100" cy="100" r="1.8"/>
+      </svg>
+      <div class="digital">
+        <div class="time" id="time">--:--:--</div>
+        <div class="date"><span class="wk" id="wk"></span><span class="dtl" id="dtl"></span><span class="dts" id="dts"></span></div>
+      </div>
+    </div>
+    <section>
+      <div class="cal-head">
+        <div class="cal-title" id="calTitle"></div>
+        <div class="nav">
+          <button type="button" id="prev" aria-label="Previous month">‹</button>
+          <button type="button" id="todayBtn">Today</button>
+          <button type="button" id="next" aria-label="Next month">›</button>
+        </div>
+      </div>
+      <div class="grid" id="grid"></div>
+    </section>
   </section>
 
-  <!-- Calendar / Pomodoro (always right) -->
-  <section class="card calcard" aria-label="Calendar and Pomodoro">
-    <div class="cal" id="cal" data-view="cal" data-mode="focus">
-
-      <div class="cal-head">
-        <div class="titlebox">
-          <div class="only-cal"><span class="month" id="month" title="Back to today"></span><span class="year" id="year"></span></div>
-          <div class="chips only-pomo" id="chips">
-            <button data-m="focus">Focus</button>
-            <button data-m="short">Short</button>
-            <button data-m="long">Long</button>
+  <section class="view view-pomo" id="viewPomo" hidden>
+    <div class="ring-wrap">
+      <div class="ring-box" id="ringBox">
+        <svg viewBox="0 0 200 200" aria-hidden="true">
+          <circle class="ring-bg" cx="100" cy="100" r="90"/>
+          <circle class="ring-fg" id="ringFg" cx="100" cy="100" r="90" transform="rotate(-90 100 100)"/>
+        </svg>
+        <div class="ring-center">
+          <div class="p-time" id="pTime" role="timer">25:00</div>
+          <div class="p-label" id="pLabel">Focus</div>
+        </div>
+      </div>
+    </div>
+    <div class="p-side">
+      <div class="seg tabs" role="group" aria-label="Session type">
+        <button type="button" data-pm="focus" aria-pressed="true">Focus</button>
+        <button type="button" data-pm="short" aria-pressed="false">Short break</button>
+        <button type="button" data-pm="long" aria-pressed="false">Long break</button>
+      </div>
+      <div class="controls">
+        <button type="button" class="circle" id="pReset" aria-label="Reset timer">Reset</button>
+        <div class="mini-group">
+          <button type="button" class="mini" id="pSkip" aria-label="Skip to next session" title="Skip"><svg viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg></button>
+          <button type="button" class="mini" id="pSound" aria-label="Sound" title="Sound"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/><line id="soundOff" x1="3" y1="3" x2="21" y2="21"/></svg></button>
+        </div>
+        <button type="button" class="circle primary" id="pStart">Start</button>
+      </div>
+      <div class="meta">
+        <div class="sessions"><div class="dots" id="dots"><i></i><i></i><i></i><i></i></div><span id="pToday">0 today</span></div>
+        <div class="step">
+          <output id="durVal">25 min</output>
+          <div class="stepper">
+            <button type="button" id="durMinus" aria-label="Shorter">−</button>
+            <button type="button" id="durPlus" aria-label="Longer">+</button>
           </div>
         </div>
-        <div class="tools">
-          <div class="nav only-cal">
-            <button class="ic" id="prev" aria-label="Previous month">‹</button>
-            <button class="ic" id="next" aria-label="Next month">›</button>
-          </div>
-          <button class="ic" id="viewBtn" aria-label="Switch calendar / pomodoro"></button>
-          <button class="ic" id="themeBtn" aria-label="Switch theme"></button>
-        </div>
       </div>
-
-      <!-- Calendar view -->
-      <div class="calbody only-cal">
-        <div class="dow" id="dow"></div>
-        <div class="grid" id="grid"></div>
-      </div>
-
-      <!-- Pomodoro view -->
-      <div class="pomo only-pomo">
-        <div class="ringrow">
-        <button class="adj" id="minus" aria-label="Subtract 5 minutes" title="−5 min">−5</button>
-        <div class="ringwrap">
-          <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" aria-label="Pomodoro timer">
-            <circle class="ring-track" cx="50" cy="50" r="42"/>
-            <circle class="ring-prog" id="prog" cx="50" cy="50" r="42" transform="rotate(-90 50 50)"/>
-            <text class="lbl" id="plabel" x="50" y="35">FOCUS</text>
-            <text class="time" id="ptime" x="50" y="50">25:00</text>
-            <g id="dots"></g>
-          </svg>
-        </div>
-        <button class="adj" id="plus" aria-label="Add 5 minutes" title="+5 min">+5</button>
-        </div>
-        <div class="ctrls">
-          <button class="cbtn" id="reset" aria-label="Reset"></button>
-          <button class="cbtn main" id="play" aria-label="Start / pause"></button>
-          <button class="cbtn" id="skip" aria-label="Skip"></button>
-        </div>
-      </div>
-
     </div>
   </section>
-
 </div>
 
 <script>
-/* ===================== CONFIG — edit me ===================== */
-const P = new URLSearchParams(location.search);
-/* URL options (add to the embed link):
-   ?theme=auto|light|dark   ?week=0|1   ?tz=Asia/Phnom_Penh   ?view=pomodoro
-   ?focus=25&short=5&long=15   ?auto=1 (auto-start next session)   ?sound=0 (mute)       */
-const CONFIG = {
-  timeZone: P.get("tz") || null,                  // null = device time zone
-  weekStart: P.has("week") ? +P.get("week") : 0,  // 0 = Sunday, 1 = Monday
-  theme: P.get("theme") || "auto",                // default theme: "auto" | "light" | "dark"
-  view: /^pomo/.test(P.get("view") || "") ? "pomo" : "cal",
-  focus: +P.get("focus") || 25,                   // minutes
-  short: +P.get("short") || 5,
-  long: +P.get("long") || 15,
-  longEvery: 4,                                   // long break after this many focus sessions
-  autoStart: P.get("auto") === "1",
-  sound: P.get("sound") !== "0",
-  locale: undefined                               // e.g. "en-GB"
-};
-/* ============================================================ */
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var pad = function (n) { return n < 10 ? '0' + n : '' + n; };
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 
-const $ = id => document.getElementById(id);
-const NS = "http://www.w3.org/2000/svg";
-const store = {
-  get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
-  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
-};
+  // ---------- Theme: follows the system unless toggled (or ?theme=dark|light)
+  var root = document.documentElement;
+  var params = new URLSearchParams(location.search);
+  var forcedTheme = params.get('theme') || lsGet('cc-theme');
+  if (forcedTheme === 'dark' || forcedTheme === 'light') root.setAttribute('data-theme', forcedTheme);
+  $('toggle').onclick = function () {
+    var isDark = root.getAttribute('data-theme') === 'dark' ||
+      (!root.getAttribute('data-theme') && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+    var next = isDark ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    lsSet('cc-theme', next);
+  };
 
-let TZ = CONFIG.timeZone || undefined;
-try { new Intl.DateTimeFormat("en-US", { timeZone: TZ }); } catch (e) { TZ = undefined; }
-
-/* ---------- Icons ---------- */
-const ICON = {
-  timer:    '<svg viewBox="0 0 24 24"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 13.5V9.5M10 2.5h4"/></svg>',
-  calendar: '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="3.5"/><path d="M4 10.5h16M8.5 3v4M15.5 3v4"/></svg>',
-  auto:     '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg>',
-  light:    '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4"/></svg>',
-  dark:     '<svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>',
-  play:  '<svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg>',
-  pause: '<svg viewBox="0 0 24 24"><rect x="6.5" y="5" width="4" height="14" rx="1.2"/><rect x="13.5" y="5" width="4" height="14" rx="1.2"/></svg>',
-  reset: '<svg viewBox="0 0 24 24"><path d="M12 5V2L7 6.5 12 11V8a5 5 0 1 1-5 5H5a7 7 0 1 0 7-8z"/></svg>',
-  skip:  '<svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6zM16 6h2.2v12H16z"/></svg>'
-};
-$("reset").innerHTML = ICON.reset;
-$("skip").innerHTML = ICON.skip;
-
-/* ---------- Theme: auto / light / dark (saved) ---------- */
-const THEMES = ["auto", "light", "dark"];
-const mq = window.matchMedia("(prefers-color-scheme: dark)");
-let themeMode = THEMES.includes(store.get("cw_theme")) ? store.get("cw_theme") : (THEMES.includes(CONFIG.theme) ? CONFIG.theme : "auto");
-function applyTheme() {
-  const light = themeMode === "light" || (themeMode === "auto" && !mq.matches);
-  document.documentElement.classList.toggle("light", light);
-  $("themeBtn").innerHTML = ICON[themeMode];
-  $("themeBtn").title = "Theme: " + themeMode;
-}
-$("themeBtn").onclick = () => {
-  themeMode = THEMES[(THEMES.indexOf(themeMode) + 1) % THEMES.length];
-  store.set("cw_theme", themeMode);
-  applyTheme();
-};
-if (mq.addEventListener) mq.addEventListener("change", applyTheme);
-applyTheme();
-
-/* ---------- Switch between Calendar and Pomodoro (saved) ---------- */
-let ui = ["cal", "pomo"].includes(store.get("cw_view")) ? store.get("cw_view") : CONFIG.view;
-function setUI(v) {
-  ui = v;
-  $("cal").dataset.view = v;
-  $("viewBtn").innerHTML = v === "cal" ? ICON.timer : ICON.calendar;
-  $("viewBtn").title = v === "cal" ? "Pomodoro timer" : "Calendar";
-  store.set("cw_view", v);
-  if (v === "pomo") pomoRender(true);
-}
-$("viewBtn").onclick = () => setUI(ui === "cal" ? "pomo" : "cal");
-
-/* ---------- Clock face ---------- */
-(function buildFace() {
-  const ticks = $("ticks"), nums = $("nums");
-  for (let i = 0; i < 60; i++) {
-    const major = i % 5 === 0;
-    const a = i * 6 * Math.PI / 180;
-    const r1 = major ? 45 : 46.5, r2 = 49;
-    const l = document.createElementNS(NS, "line");
-    l.setAttribute("x1", 50 + r1 * Math.sin(a)); l.setAttribute("y1", 50 - r1 * Math.cos(a));
-    l.setAttribute("x2", 50 + r2 * Math.sin(a)); l.setAttribute("y2", 50 - r2 * Math.cos(a));
-    l.setAttribute("stroke", "var(--tick)");
-    l.setAttribute("stroke-width", major ? 1.2 : 0.5);
-    l.setAttribute("stroke-linecap", "round");
+  // ---------- Clock
+  var NS = 'http://www.w3.org/2000/svg';
+  var ticks = $('ticks'), nums = $('nums');
+  for (var i = 0; i < 60; i++) {
+    var major = i % 5 === 0, a = i * 6 * Math.PI / 180;
+    var r1 = major ? 90 : 92, r2 = 97;
+    var l = document.createElementNS(NS, 'line');
+    l.setAttribute('x1', 100 + r1 * Math.sin(a)); l.setAttribute('y1', 100 - r1 * Math.cos(a));
+    l.setAttribute('x2', 100 + r2 * Math.sin(a)); l.setAttribute('y2', 100 - r2 * Math.cos(a));
+    l.setAttribute('class', 'tick' + (major ? ' major' : ''));
     ticks.appendChild(l);
   }
-  for (let n = 1; n <= 12; n++) {
-    const a = n * 30 * Math.PI / 180;
-    const t = document.createElementNS(NS, "text");
-    t.setAttribute("x", 50 + 35.5 * Math.sin(a));
-    t.setAttribute("y", 50 - 35.5 * Math.cos(a));
-    t.setAttribute("class", "num");
-    t.textContent = n;
+  for (var k = 1; k <= 12; k++) {
+    var ak = k * 30 * Math.PI / 180, t = document.createElementNS(NS, 'text');
+    t.setAttribute('x', (100 + 75 * Math.sin(ak)).toFixed(2));
+    t.setAttribute('y', (100 - 75 * Math.cos(ak)).toFixed(2));
+    t.setAttribute('class', 'num');
+    t.textContent = k;
     nums.appendChild(t);
   }
-})();
+  var hh = $('hh'), mh = $('mh'), sh = $('sh'), timeEl = $('time');
+  var wkEl = $('wk'), dtlEl = $('dtl'), dtsEl = $('dts');
+  function rot(el, deg) { el.setAttribute('transform', 'rotate(' + deg + ' 100 100)'); }
 
-/* ---------- Time helpers ---------- */
-const fmtParts = new Intl.DateTimeFormat("en-US", {
-  timeZone: TZ, year: "numeric", month: "numeric", day: "numeric",
-  hour: "numeric", minute: "numeric", second: "numeric", hourCycle: "h23"
-});
-function now() {
-  const d = new Date(), p = {};
-  fmtParts.formatToParts(d).forEach(x => { if (x.type !== "literal") p[x.type] = +x.value; });
-  p.ms = d.getMilliseconds();
-  return p;
-}
-
-/* ---------- Calendar ---------- */
-let today = now();
-let cur = { y: today.year, m: today.month - 1 };
-let viewingToday = true;
-
-function renderCalendar() {
-  const first = new Date(Date.UTC(cur.y, cur.m, 1));
-  const offset = (first.getUTCDay() - CONFIG.weekStart + 7) % 7;
-  const days = new Date(Date.UTC(cur.y, cur.m + 1, 0)).getUTCDate();
-  const rows = Math.ceil((offset + days) / 7);
-
-  $("month").textContent = new Intl.DateTimeFormat(CONFIG.locale, { timeZone: "UTC", month: "long" }).format(first);
-  $("year").textContent = cur.y;
-
-  const letters = ["S", "M", "T", "W", "T", "F", "S"];
-  let dow = "";
-  for (let i = 0; i < 7; i++) dow += `<div>${letters[(CONFIG.weekStart + i) % 7]}</div>`;
-  $("dow").innerHTML = dow;
-
-  let html = "";
-  for (let i = 0; i < offset; i++) html += `<div class="cell"></div>`;
-  for (let d = 1; d <= days; d++) {
-    const idx = (CONFIG.weekStart + (offset + d - 1) % 7) % 7;
-    const isToday = cur.y === today.year && cur.m === today.month - 1 && d === today.day;
-    html += `<div class="cell${idx === 0 || idx === 6 ? " we" : ""}${isToday ? " today" : ""}"><span>${d}</span></div>`;
-  }
-  const g = $("grid");
-  g.style.gridTemplateRows = `repeat(${rows}, minmax(0, 1fr))`;
-  g.innerHTML = html;
-}
-function shiftMonth(n) {
-  const d = new Date(Date.UTC(cur.y, cur.m + n, 1));
-  cur = { y: d.getUTCFullYear(), m: d.getUTCMonth() };
-  viewingToday = cur.y === today.year && cur.m === today.month - 1;
-  renderCalendar();
-}
-function goToday() {
-  cur = { y: today.year, m: today.month - 1 };
-  viewingToday = true;
-  renderCalendar();
-}
-$("prev").onclick = () => shiftMonth(-1);
-$("next").onclick = () => shiftMonth(1);
-$("month").onclick = goToday;
-
-/* Touch (calendar view only): swipe left/right = change month, double-tap = today */
-(function touch() {
-  const el = $("cal");
-  let sx = 0, sy = 0, tracking = false, lastTap = 0;
-  el.addEventListener("touchstart", e => {
-    if (ui !== "cal" || e.touches.length !== 1) return;
-    sx = e.touches[0].clientX; sy = e.touches[0].clientY; tracking = true;
-  }, { passive: true });
-  el.addEventListener("touchend", e => {
-    if (!tracking) return;
-    tracking = false;
-    const t = e.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy;
-    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-      shiftMonth(dx < 0 ? 1 : -1);
-    } else if (Math.abs(dx) < 10 && Math.abs(dy) < 10 && !e.target.closest("button")) {
-      const n = Date.now();
-      if (n - lastTap < 350) goToday();
-      lastTap = n;
+  var viewY, viewM, lastDay = -1, lastSec = -1;
+  var gridEl = $('grid'), titleEl = $('calTitle');
+  var DOW = ['M','T','W','T','F','S','S'];
+  var MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  function renderCal() {
+    var now = new Date(), html = '';
+    DOW.forEach(function (d) { html += '<div class="dow">' + d + '</div>'; });
+    var offset = (new Date(viewY, viewM, 1).getDay() + 6) % 7;
+    var start = new Date(viewY, viewM, 1 - offset);
+    for (var i = 0; i < 42; i++) {
+      var d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+      var cls = 'day';
+      if (d.getMonth() !== viewM) cls += ' out';
+      if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()) cls += ' today';
+      html += '<div class="' + cls + '"><span>' + d.getDate() + '</span></div>';
     }
-  }, { passive: true });
-})();
-
-/* ---------- Pomodoro ---------- */
-const DUR = { focus: CONFIG.focus * 60, short: CONFIG.short * 60, long: CONFIG.long * 60 };
-const LABEL = { focus: "FOCUS", short: "SHORT BREAK", long: "LONG BREAK" };
-const RING = 2 * Math.PI * 42;
-const KEY = "cw_pomo_v1";
-
-let S = (function load() {
-  let s = null;
-  try { s = JSON.parse(store.get(KEY) || "null"); } catch (e) {}
-  if (!s || !DUR[s.mode]) s = { mode: "focus", running: false, endAt: 0, left: DUR.focus, total: DUR.focus, done: 0 };
-  s.total = Number.isFinite(s.total) && s.total > 0 ? s.total : DUR[s.mode];
-  s.left = Number.isFinite(s.left) ? Math.min(s.left, s.total) : s.total;
-  s.done = Number.isFinite(s.done) ? s.done : 0;
-  if (s.running && !(s.endAt > 0)) s.running = false;
-  return s;
-})();
-const save = () => store.set(KEY, JSON.stringify(S));
-
-/* Dots (progress towards the long break) */
-(function buildDots() {
-  const g = $("dots"), n = CONFIG.longEvery, gap = 6;
-  for (let i = 0; i < n; i++) {
-    const c = document.createElementNS(NS, "circle");
-    c.setAttribute("class", "dot");
-    c.setAttribute("cx", 50 + (i - (n - 1) / 2) * gap);
-    c.setAttribute("cy", 66);
-    c.setAttribute("r", 1.8);
-    g.appendChild(c);
+    gridEl.innerHTML = html;
+    titleEl.innerHTML = MONTHS[viewM] + '<span>' + viewY + '</span>';
   }
-})();
-$("prog").setAttribute("stroke-dasharray", RING.toFixed(2));
+  function goToday() { var n = new Date(); viewY = n.getFullYear(); viewM = n.getMonth(); renderCal(); }
+  function shift(n) { var d = new Date(viewY, viewM + n, 1); viewY = d.getFullYear(); viewM = d.getMonth(); renderCal(); }
+  $('prev').onclick = function () { shift(-1); };
+  $('next').onclick = function () { shift(1); };
+  $('todayBtn').onclick = goToday;
 
-/* Sound (the audio context is unlocked by the first tap on Start) */
-let actx = null;
-function unlockAudio() {
-  try {
-    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-    if (actx.state === "suspended") actx.resume();
-  } catch (e) {}
-}
-function beep() {
-  try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) {}
-  if (!CONFIG.sound) return;
-  try {
-    unlockAudio();
-    const t0 = actx.currentTime;
-    [0, .25, .5].forEach((d, i) => {
-      const o = actx.createOscillator(), g = actx.createGain();
-      o.type = "sine"; o.frequency.value = i === 2 ? 1175 : 880;
-      g.gain.setValueAtTime(0.0001, t0 + d);
-      g.gain.exponentialRampToValueAtTime(0.25, t0 + d + .02);
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + d + .22);
-      o.connect(g); g.connect(actx.destination);
-      o.start(t0 + d); o.stop(t0 + d + .25);
+  var raf = 0;
+  function clockFrame() {
+    var n = new Date(), h = n.getHours(), m = n.getMinutes(), s = n.getSeconds(), ms = n.getMilliseconds();
+    rot(sh, (s + ms / 1000) * 6);
+    rot(mh, (m + s / 60) * 6);
+    rot(hh, ((h % 12) + m / 60) * 30);
+    if (s !== lastSec) {
+      lastSec = s;
+      timeEl.innerHTML = (h % 12 || 12) + ':' + pad(m) + ':' + pad(s) + '<small>' + (h >= 12 ? 'PM' : 'AM') + '</small>';
+      wkEl.textContent = n.toLocaleDateString(undefined, { weekday: 'long' });
+      dtlEl.textContent = n.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
+      dtsEl.textContent = n.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    }
+    if (n.getDate() !== lastDay) { lastDay = n.getDate(); renderCal(); }
+    raf = requestAnimationFrame(clockFrame);
+  }
+
+  // ---------- Pomodoro
+  var NAMES = { focus: 'Focus', short: 'Short break', long: 'Long break' };
+  var KEY = 'cc-pomo';
+  var todayStr = function () { var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
+  function fresh() {
+    return { mode: 'focus', dur: { focus: 25, short: 5, long: 15 }, running: false, endAt: 0, left: 25 * 60, cycle: 0, day: todayStr(), done: 0, sound: true };
+  }
+  function clampMin(v, d) { v = Math.round(Number(v)); return isFinite(v) && v >= 1 && v <= 120 ? v : d; }
+  var S = fresh();
+  (function load() {
+    var raw = lsGet(KEY); if (!raw) return;
+    try {
+      var o = JSON.parse(raw);
+      if (NAMES[o.mode]) S.mode = o.mode;
+      S.dur.focus = clampMin(o.dur && o.dur.focus, 25);
+      S.dur.short = clampMin(o.dur && o.dur.short, 5);
+      S.dur.long = clampMin(o.dur && o.dur.long, 15);
+      S.running = !!o.running && +o.endAt > 0;
+      S.endAt = +o.endAt || 0;
+      S.left = Math.max(0, Math.min(+o.left || S.dur[S.mode] * 60, S.dur[S.mode] * 60));
+      S.cycle = Math.max(0, Math.min(4, +o.cycle || 0));
+      S.day = o.day || todayStr(); S.done = Math.max(0, +o.done || 0);
+      S.sound = o.sound !== false;
+    } catch (e) { S = fresh(); }
+  })();
+  function save() { lsSet(KEY, JSON.stringify(S)); }
+
+  var ac = null;
+  function audio() {
+    try {
+      if (!ac) { var C = window.AudioContext || window.webkitAudioContext; if (C) ac = new C(); }
+      if (ac && ac.state === 'suspended') ac.resume();
+    } catch (e) {}
+  }
+  document.addEventListener('pointerdown', audio, { once: true });
+  function beep() {
+    if (!S.sound || !ac) return;
+    try {
+      var t = ac.currentTime;
+      [0, 0.22, 0.44].forEach(function (o, i) {
+        var osc = ac.createOscillator(), g = ac.createGain();
+        osc.type = 'sine'; osc.frequency.value = i === 2 ? 1046 : 784;
+        g.gain.setValueAtTime(0.0001, t + o);
+        g.gain.exponentialRampToValueAtTime(0.25, t + o + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + o + 0.2);
+        osc.connect(g); g.connect(ac.destination);
+        osc.start(t + o); osc.stop(t + o + 0.22);
+      });
+    } catch (e) {}
+  }
+
+  function remaining() { return S.running ? Math.max(0, Math.ceil((S.endAt - Date.now()) / 1000)) : S.left; }
+  function setMode(m) { S.mode = m; S.running = false; S.left = S.dur[m] * 60; save(); renderPomo(); }
+  function rollDay() { if (S.day !== todayStr()) { S.day = todayStr(); S.done = 0; } }
+  function advance(counted) {
+    rollDay();
+    var next;
+    if (S.mode === 'focus') {
+      if (counted) { S.cycle = Math.min(4, S.cycle + 1); S.done++; }
+      next = S.cycle >= 4 ? 'long' : 'short';
+    } else {
+      if (S.mode === 'long') S.cycle = 0;
+      next = 'focus';
+    }
+    setMode(next);
+  }
+  function complete() {
+    beep();
+    var box = $('ringBox'); box.classList.remove('done'); void box.offsetWidth; box.classList.add('done');
+    setTimeout(function () { box.classList.remove('done'); }, 2000);
+    advance(true);
+  }
+  function startStop() {
+    audio();
+    if (S.running) { S.left = remaining(); S.running = false; }
+    else { if (S.left <= 0) S.left = S.dur[S.mode] * 60; S.endAt = Date.now() + S.left * 1000; S.running = true; }
+    save(); renderPomo();
+  }
+
+  var CIRC = 2 * Math.PI * 90, ringFg = $('ringFg');
+  ringFg.style.strokeDasharray = CIRC;
+  function renderPomo() {
+    rollDay();
+    var rem = remaining(), total = S.dur[S.mode] * 60;
+    $('pTime').textContent = pad(Math.floor(rem / 60)) + ':' + pad(rem % 60);
+    $('pLabel').textContent = NAMES[S.mode] + (S.running ? '' : (rem < total ? ' · paused' : ''));
+    ringFg.style.strokeDashoffset = CIRC * (1 - Math.max(0, Math.min(1, rem / total)));
+    $('ringBox').classList.toggle('brk', S.mode !== 'focus');
+    Array.prototype.forEach.call(document.querySelectorAll('[data-pm]'), function (b) {
+      b.setAttribute('aria-pressed', b.getAttribute('data-pm') === S.mode ? 'true' : 'false');
     });
-  } catch (e) {}
-}
-
-function setMode(m, autoStart) {
-  S.mode = m; S.left = DUR[m]; S.total = DUR[m]; S.running = false; S.endAt = 0;
-  if (autoStart) startTimer(); else save();
-  pomoRender(true);
-}
-function startTimer() {
-  unlockAudio();
-  if (S.left <= 0) S.left = S.total;
-  S.running = true; S.endAt = Date.now() + S.left * 1000;
-  save(); pomoRender(true);
-}
-function pauseTimer() {
-  S.left = Math.max(0, Math.ceil((S.endAt - Date.now()) / 1000));
-  S.running = false; S.endAt = 0;
-  save(); pomoRender(true);
-}
-function complete(silent) {
-  if (!silent) beep();
-  let next;
-  if (S.mode === "focus") { S.done++; next = S.done % CONFIG.longEvery === 0 ? "long" : "short"; }
-  else next = "focus";
-  setMode(next, CONFIG.autoStart);
-}
-
-$("play").onclick = () => (S.running ? pauseTimer() : startTimer());
-$("reset").onclick = () => { S.left = DUR[S.mode]; S.total = DUR[S.mode]; S.running = false; S.endAt = 0; save(); pomoRender(true); };
-
-/* +5 / −5 minutes on the current session (works while running or paused; min 1 min, max 180 min) */
-function adjust(deltaSec) {
-  const rem = S.running ? Math.max(0, Math.ceil((S.endAt - Date.now()) / 1000)) : S.left;
-  let nr = rem + deltaSec;
-  if (deltaSec < 0) { if (rem <= 60) return; nr = Math.max(60, nr); }
-  else { nr = Math.min(180 * 60, nr); if (nr <= rem) return; }
-  const d = nr - rem;
-  S.total = Math.max(60, S.total + d);
-  if (S.running) S.endAt += d * 1000; else S.left = nr;
-  save(); pomoRender(true);
-}
-$("minus").onclick = () => adjust(-300);
-$("plus").onclick = () => adjust(300);
-$("skip").onclick = () => setMode(S.mode === "focus" ? "short" : "focus", false);
-$("chips").addEventListener("click", e => {
-  const b = e.target.closest("button[data-m]");
-  if (b) setMode(b.dataset.m, false);
-});
-
-let lastShown = "", lastRunning = null, lastMode = null, lastDots = -1;
-function pomoRender(force) {
-  const total = S.total * 1000;
-  const ms = S.running ? Math.max(0, S.endAt - Date.now()) : S.left * 1000;
-  const secs = Math.ceil(ms / 1000);
-  const txt = String(Math.floor(secs / 60)).padStart(2, "0") + ":" + String(secs % 60).padStart(2, "0");
-
-  if (txt !== lastShown || force) {
-    lastShown = txt;
-    $("ptime").textContent = txt;
-    $("prog").style.strokeDashoffset = (RING * (1 - Math.min(1, ms / total))).toFixed(2);
-  } else {
-    $("prog").style.strokeDashoffset = (RING * (1 - Math.min(1, ms / total))).toFixed(2);
+    $('pStart').textContent = S.running ? 'Pause' : (rem < total ? 'Resume' : 'Start');
+    $('pStart').classList.toggle('pause', S.running);
+    Array.prototype.forEach.call($('dots').children, function (d, i) { d.className = i < S.cycle ? 'on' : ''; });
+    $('pToday').textContent = S.done + ' today';
+    $('durVal').textContent = S.dur[S.mode] + ' min';
+    $('soundOff').style.display = S.sound ? 'none' : '';
+    $('pSound').classList.toggle('off', !S.sound);
+    $('pSound').setAttribute('aria-pressed', S.sound ? 'true' : 'false');
+    $('runDot').hidden = !(S.running && view !== 'pomo');
   }
-  if (S.running !== lastRunning || force) {
-    lastRunning = S.running;
-    $("play").innerHTML = S.running ? ICON.pause : ICON.play;
-  }
-  if (S.mode !== lastMode || force) {
-    lastMode = S.mode;
-    $("cal").dataset.mode = S.mode;
-    $("plabel").textContent = LABEL[S.mode];
-    document.querySelectorAll("#chips button").forEach(b => b.classList.toggle("on", b.dataset.m === S.mode));
-  }
-  let n = S.done % CONFIG.longEvery;
-  if (n === 0 && S.done > 0 && S.mode === "long") n = CONFIG.longEvery;
-  if (n !== lastDots || force) {
-    lastDots = n;
-    [...$("dots").children].forEach((c, i) => c.classList.toggle("on", i < n));
-  }
-}
+  setInterval(function () {
+    if (S.running && remaining() <= 0) { complete(); return; }
+    renderPomo();
+  }, 250);
 
-/* Keep time accurate even when the page was in the background or closed */
-if (S.running && Date.now() >= S.endAt) complete(Date.now() - S.endAt > 3000);
-setInterval(() => {
-  if (S.running && Date.now() >= S.endAt) complete(false);
-  if (ui === "pomo") pomoRender(false);
-}, 250);
-
-/* ---------- Clock animation loop ---------- */
-let lastDayKey = "", rafId = 0;
-function tick() {
-  const t = now();
-  const sec = t.second + t.ms / 1000;
-  const min = t.minute + sec / 60;
-  const hr = (t.hour % 12) + min / 60;
-  $("sh").setAttribute("transform", `rotate(${sec * 6} 50 50)`);
-  $("mh").setAttribute("transform", `rotate(${min * 6} 50 50)`);
-  $("hh").setAttribute("transform", `rotate(${hr * 30} 50 50)`);
-
-  const key = `${t.year}-${t.month}-${t.day}`;
-  if (key !== lastDayKey) {
-    lastDayKey = key;
-    today = t;
-    if (viewingToday) cur = { y: t.year, m: t.month - 1 };
-    renderCalendar();
+  $('pStart').onclick = startStop;
+  $('pReset').onclick = function () { S.running = false; S.left = S.dur[S.mode] * 60; save(); renderPomo(); };
+  $('pSkip').onclick = function () { advance(false); };
+  $('pSound').onclick = function () { S.sound = !S.sound; if (S.sound) audio(); save(); renderPomo(); };
+  Array.prototype.forEach.call(document.querySelectorAll('[data-pm]'), function (b) {
+    b.onclick = function () { setMode(b.getAttribute('data-pm')); };
+  });
+  function changeDur(dir) {
+    // Snap to multiples of 5 (5, 10, 15 ...); the only value below 5 is 1 minute.
+    var cur = S.dur[S.mode];
+    var v = dir > 0 ? (Math.floor(cur / 5) + 1) * 5 : (Math.ceil(cur / 5) - 1) * 5;
+    v = Math.max(1, Math.min(120, v));
+    S.dur[S.mode] = v; S.running = false; S.left = v * 60; save(); renderPomo();
   }
-  rafId = requestAnimationFrame(tick);
-}
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden) cancelAnimationFrame(rafId);
-  else { rafId = requestAnimationFrame(tick); pomoRender(true); }
-});
+  $('durMinus').onclick = function () { changeDur(-1); };
+  $('durPlus').onclick = function () { changeDur(1); };
 
-/* ---------- Start ---------- */
-renderCalendar();
-setUI(ui);
-pomoRender(true);
-rafId = requestAnimationFrame(tick);
+  // ---------- Mode switch (?mode=pomodoro opens the timer by default)
+  var view = 'clock';
+  function setView(v) {
+    view = v;
+    $('viewClock').hidden = v !== 'clock';
+    $('viewPomo').hidden = v !== 'pomo';
+    $('mClock').setAttribute('aria-pressed', v === 'clock' ? 'true' : 'false');
+    $('mPomo').setAttribute('aria-pressed', v === 'pomo' ? 'true' : 'false');
+    lsSet('cc-view', v);
+    cancelAnimationFrame(raf);
+    if (v === 'clock') clockFrame();
+    renderPomo();
+  }
+  $('mClock').onclick = function () { setView('clock'); };
+  $('mPomo').onclick = function () { setView('pomo'); };
+
+  var qm = (params.get('mode') || '').toLowerCase();
+  var startView = qm === 'pomodoro' || qm === 'pomo' ? 'pomo' : qm === 'clock' ? 'clock' : (lsGet('cc-view') === 'pomo' ? 'pomo' : 'clock');
+  goToday();
+  setView(startView);
+})();
 </script>
+
 </body>
 </html>
