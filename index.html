@@ -174,25 +174,33 @@
   .mini:hover { opacity: .8; }
   .mini svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .mini.off { color: var(--muted); }
-  .meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: .8rem; color: var(--muted); }
+  .meta { display: flex; flex-direction: column; gap: 10px; font-size: .8rem; color: var(--muted); }
   .sessions { display: flex; align-items: center; gap: 8px; }
   .dots { display: flex; gap: 5px; }
   .dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--track); display: block; }
   .dots i.on { background: var(--orange); }
-  .step { display: flex; align-items: center; gap: 8px; }
-  .step output { color: var(--text); font-variant-numeric: tabular-nums; }
-  .stepper { display: flex; background: var(--surface-2); border-radius: 9px; }
-  .stepper button { width: 36px; height: 28px; border: 0; background: transparent; color: var(--text); font-size: 1.1rem; line-height: 1; cursor: pointer; border-radius: 9px 0 0 9px; transition: background .15s; }
-  .stepper button + button { border-left: 1px solid var(--border); border-radius: 0 9px 9px 0; }
+  .settings { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .sel { position: relative; display: inline-block; }
+  .sel select {
+    appearance: none; -webkit-appearance: none; border: 0; border-radius: 9px; height: 28px; padding: 0 24px 0 10px;
+    background: var(--surface-2); color: var(--text); font: inherit; font-size: .8rem; cursor: pointer;
+  }
+  .sel::after {
+    content: ""; position: absolute; right: 10px; top: 50%; width: 5px; height: 5px; pointer-events: none;
+    border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: translateY(-70%) rotate(45deg);
+  }
+  .stepper { display: flex; align-items: center; background: var(--surface-2); border-radius: 9px; }
+  .stepper button { width: 32px; height: 28px; border: 0; background: transparent; color: var(--text); font-size: 1.1rem; line-height: 1; cursor: pointer; border-radius: 9px; transition: background .15s; }
   .stepper button:hover { background: var(--track); }
+  .stepper output { min-width: 52px; text-align: center; color: var(--text); font-size: .8rem; font-variant-numeric: tabular-nums; }
+  .sm { display: none; }
 
   @media (prefers-reduced-motion: reduce) { .ring-box.done { animation: none; } .ring-fg { transition: none; } }
 
   /* ---------- Phones: compact, fills the embed height so nothing scrolls ---------- */
   @media (max-width: 560px) {
-    html, body { overflow: hidden; }
-    .app { height: 100%; min-height: 300px; padding: 8px 14px 10px; gap: 6px; }
-    .view-pomo { grid-template-columns: 1fr; gap: 8px; }
+    html, body { overflow-x: hidden; }
+    .app { height: 100%; min-height: 240px; padding: 8px 14px 10px; gap: 6px; }
     .rbtn { width: 32px; height: 32px; }
     .seg button { height: 32px; }
 
@@ -219,15 +227,23 @@
     .day { aspect-ratio: auto; font-size: .78rem; }
     .day span { width: 1.8em; height: 1.8em; }
 
-    .view-pomo { display: flex; flex-direction: column; align-items: stretch; }
-    .ring-wrap { flex: 1; }
-    .ring-box { width: auto; height: 100%; max-height: 240px; max-width: 100%; }
-    .p-time { font-size: min(2rem, 8vh); }
-    .p-label { font-size: .75rem; }
-    .p-side { gap: 10px; flex: none; }
-    .controls { padding: 0 4px; }
-    .circle { width: 50px; height: 50px; font-size: .78rem; }
-    .mini { width: 34px; height: 34px; }
+    /* Pomodoro mirrors the clock layout: countdown ring on the left, controls on the right. */
+    .view-pomo { flex: none; margin-block: 0 auto; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); align-items: center; gap: 12px; }
+    .ring-box { width: 100%; max-width: 150px; }
+    .p-time { font-size: 1.7rem; }
+    .p-label { font-size: .7rem; }
+    .p-side { gap: 8px; }
+    .lg { display: none; }
+    .sm { display: inline; }
+    .controls { padding: 0 2px; gap: 6px; }
+    .circle { width: 46px; height: 46px; font-size: .76rem; }
+    .mini { width: 32px; height: 32px; }
+    .meta { gap: 6px; }
+    .settings { gap: 6px; }
+    .sel select { font-size: .75rem; padding: 0 20px 0 8px; }
+    .sel::after { right: 8px; }
+    .stepper button { width: 28px; }
+    .stepper output { min-width: 44px; font-size: .75rem; }
   }
   @media (max-width: 370px) { .cal-title span { display: none; } }
   @media (max-width: 560px) and (hover: none) { .day:not(.today):not(.out):hover { background: transparent; } }
@@ -290,23 +306,26 @@
     <div class="p-side">
       <div class="seg tabs" role="group" aria-label="Session type">
         <button type="button" data-pm="focus" aria-pressed="true">Focus</button>
-        <button type="button" data-pm="short" aria-pressed="false">Short break</button>
-        <button type="button" data-pm="long" aria-pressed="false">Long break</button>
+        <button type="button" data-pm="short" aria-pressed="false"><span class="lg">Short break</span><span class="sm">Short</span></button>
+        <button type="button" data-pm="long" aria-pressed="false"><span class="lg">Long break</span><span class="sm">Long</span></button>
       </div>
       <div class="controls">
         <button type="button" class="circle" id="pReset" aria-label="Reset timer">Reset</button>
         <div class="mini-group">
           <button type="button" class="mini" id="pSkip" aria-label="Skip to next session" title="Skip"><svg viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg></button>
-          <button type="button" class="mini" id="pSound" aria-label="Sound" title="Sound"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/><line id="soundOff" x1="3" y1="3" x2="21" y2="21"/></svg></button>
+          <button type="button" class="mini" id="pSound" aria-label="Sound on or off" title="Sound on / off"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/><line id="soundOff" x1="3" y1="3" x2="21" y2="21"/></svg></button>
         </div>
         <button type="button" class="circle primary" id="pStart">Start</button>
       </div>
       <div class="meta">
         <div class="sessions"><div class="dots" id="dots"><i></i><i></i><i></i><i></i></div><span id="pToday">0 today</span></div>
-        <div class="step">
-          <output id="durVal">25 min</output>
+        <div class="settings">
+          <label class="sel"><select id="alarmSel" aria-label="Alarm sound">
+            <option value="1">Alarm 1</option><option value="2">Alarm 2</option><option value="3">Alarm 3</option><option value="4">Alarm 4</option><option value="5">Alarm 5</option>
+          </select></label>
           <div class="stepper">
             <button type="button" id="durMinus" aria-label="Shorter">−</button>
+            <output id="durVal">25 min</output>
             <button type="button" id="durPlus" aria-label="Longer">+</button>
           </div>
         </div>
@@ -406,7 +425,7 @@
   var KEY = 'cc-pomo';
   var todayStr = function () { var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
   function fresh() {
-    return { mode: 'focus', dur: { focus: 25, short: 5, long: 15 }, running: false, endAt: 0, left: 25 * 60, cycle: 0, day: todayStr(), done: 0, sound: true };
+    return { mode: 'focus', dur: { focus: 25, short: 5, long: 15 }, running: false, endAt: 0, left: 25 * 60, cycle: 0, day: todayStr(), done: 0, sound: true, alarm: 1 };
   }
   function clampMin(v, d) { v = Math.round(Number(v)); return isFinite(v) && v >= 1 && v <= 120 ? v : d; }
   var S = fresh();
@@ -424,31 +443,57 @@
       S.cycle = Math.max(0, Math.min(4, +o.cycle || 0));
       S.day = o.day || todayStr(); S.done = Math.max(0, +o.done || 0);
       S.sound = o.sound !== false;
+      S.alarm = (+o.alarm >= 1 && +o.alarm <= 5) ? Math.round(+o.alarm) : 1;
     } catch (e) { S = fresh(); }
   })();
   function save() { lsSet(KEY, JSON.stringify(S)); }
 
-  var ac = null;
+  // Alarm sounds. Each alarm plays sounds/N.mp3 when that file sits next to this page (Pixabay downloads, see notes),
+  // and otherwise a built-in tone, so there is always a sound.
+  var ac = null, bufs = {}, tried = {};
+  function loadBuf(n) {
+    if (!ac || !window.fetch) return Promise.resolve();
+    if (tried[n]) return tried[n];
+    tried[n] = fetch('sounds/' + n + '.mp3')
+      .then(function (r) { if (!r.ok) throw new Error('missing'); return r.arrayBuffer(); })
+      .then(function (ab) { return new Promise(function (res, rej) { ac.decodeAudioData(ab, res, rej); }); })
+      .then(function (buf) { bufs[n] = buf; })
+      .catch(function () {});
+    return tried[n];
+  }
   function audio() {
     try {
       if (!ac) { var C = window.AudioContext || window.webkitAudioContext; if (C) ac = new C(); }
       if (ac && ac.state === 'suspended') ac.resume();
+      loadBuf(S.alarm);
     } catch (e) {}
   }
   document.addEventListener('pointerdown', audio, { once: true });
-  function beep() {
+  var TONES = {
+    1: [[784, 0, .18], [1046, .2, .35]],
+    2: [[1319, 0, .7]],
+    3: [[880, 0, .16], [1109, .18, .16], [1319, .36, .35]],
+    4: [[988, 0, .14], [784, .16, .14], [659, .32, .35]],
+    5: [[523, 0, .16], [523, .3, .16], [784, .6, .4]]
+  };
+  function synth(n) {
+    var t = ac.currentTime;
+    (TONES[n] || TONES[1]).forEach(function (x) {
+      var osc = ac.createOscillator(), g = ac.createGain(), at = t + x[1];
+      osc.type = n === 5 ? 'triangle' : 'sine'; osc.frequency.value = x[0];
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.exponentialRampToValueAtTime(0.28, at + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + x[2]);
+      osc.connect(g); g.connect(ac.destination);
+      osc.start(at); osc.stop(at + x[2] + 0.05);
+    });
+  }
+  function playAlarm() {
     if (!S.sound || !ac) return;
     try {
-      var t = ac.currentTime;
-      [0, 0.22, 0.44].forEach(function (o, i) {
-        var osc = ac.createOscillator(), g = ac.createGain();
-        osc.type = 'sine'; osc.frequency.value = i === 2 ? 1046 : 784;
-        g.gain.setValueAtTime(0.0001, t + o);
-        g.gain.exponentialRampToValueAtTime(0.25, t + o + 0.02);
-        g.gain.exponentialRampToValueAtTime(0.0001, t + o + 0.2);
-        osc.connect(g); g.connect(ac.destination);
-        osc.start(t + o); osc.stop(t + o + 0.22);
-      });
+      var b = bufs[S.alarm];
+      if (b) { var src = ac.createBufferSource(); src.buffer = b; src.connect(ac.destination); src.start(); }
+      else synth(S.alarm);
     } catch (e) {}
   }
 
@@ -468,7 +513,7 @@
     setMode(next);
   }
   function complete() {
-    beep();
+    playAlarm();
     var box = $('ringBox'); box.classList.remove('done'); void box.offsetWidth; box.classList.add('done');
     setTimeout(function () { box.classList.remove('done'); }, 2000);
     advance(true);
@@ -497,6 +542,7 @@
     Array.prototype.forEach.call($('dots').children, function (d, i) { d.className = i < S.cycle ? 'on' : ''; });
     $('pToday').textContent = S.done + ' today';
     $('durVal').textContent = S.dur[S.mode] + ' min';
+    if (+$('alarmSel').value !== S.alarm) $('alarmSel').value = S.alarm;
     $('soundOff').style.display = S.sound ? 'none' : '';
     $('pSound').classList.toggle('off', !S.sound);
     $('pSound').setAttribute('aria-pressed', S.sound ? 'true' : 'false');
@@ -510,6 +556,7 @@
   $('pStart').onclick = startStop;
   $('pReset').onclick = function () { S.running = false; S.left = S.dur[S.mode] * 60; save(); renderPomo(); };
   $('pSkip').onclick = function () { advance(false); };
+  $('alarmSel').onchange = function () { S.alarm = +this.value || 1; save(); audio(); loadBuf(S.alarm).then(playAlarm); };
   $('pSound').onclick = function () { S.sound = !S.sound; if (S.sound) audio(); save(); renderPomo(); };
   Array.prototype.forEach.call(document.querySelectorAll('[data-pm]'), function (b) {
     b.onclick = function () { setMode(b.getAttribute('data-pm')); };
